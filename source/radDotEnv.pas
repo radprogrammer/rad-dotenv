@@ -6,8 +6,9 @@ unit radDotEnv;
 
 
 interface
-//toreview: Open issue, may change default behavior in the future  https://github.com/radprogrammer/rad-dotenv/issues/1
-{.$DEFINE radDotEnv_SINGLETON}
+
+// toreview: Open issue, may change default behavior in the future  https://github.com/radprogrammer/rad-dotenv/issues/1
+{ .$DEFINE radDotEnv_SINGLETON }
 
 uses
   System.SysUtils,
@@ -41,14 +42,14 @@ type
     OnlyFromFile);
 
 
-  TEnvVarOptions = Record
+  TEnvVarOptions = record
     RetrieveOption:TRetrieveOption;
     KeyNameCaseOption:TKeyNameCaseOption;
     KeyValueTrimOption:TKeyValueTrimOption;
-  End;
+  end;
 
 
-  //Note: this option is n/a when using the "OnlyFromSys" Retrieve Option as no need to set System Environment Variables when only source is System
+  // Note: this option is n/a when using the "OnlyFromSys" Retrieve Option as no need to set System Environment Variables when only source is System
   TSetOption = (
     /// <summary> After DotEnv file parsing is completed, set system environment variables based on DotEnv values only for system environment variables that have no value</summary>
     /// <remarks> System variables take priority over DotEnv files</remarks>
@@ -61,13 +62,13 @@ type
     AlwaysSet);
 
 
-  TDotEnvOptions = Record
+  TDotEnvOptions = record
   const
     defEnvFilename:string = '.env';
-    defKeyNameCaseOption:TKeyNameCaseOption=TKeyNameCaseOption.AlwaysToUpperInvariant;
-    defKeyValueTrimOption:TKeyValueTrimOption=TKeyValueTrimOption.AlwaysRightTrim;
-    defRetrieveOption:TRetrieveOption=TRetrieveOption.PreferFile;
-    defSetOption:TSetOption=TSetOption.DoNotOvewrite;
+    defKeyNameCaseOption:TKeyNameCaseOption = TKeyNameCaseOption.AlwaysToUpperInvariant;
+    defKeyValueTrimOption:TKeyValueTrimOption = TKeyValueTrimOption.AlwaysRightTrim;
+    defRetrieveOption:TRetrieveOption = TRetrieveOption.PreferFile;
+    defSetOption:TSetOption = TSetOption.DoNotOvewrite;
   public
     EnvVarOptions:TEnvVarOptions;
     SetOption:TSetOption;
@@ -76,13 +77,13 @@ type
     FileEncoding:TEncoding;
     LogProc:TProc<string>;
     class function DefaultOptions:TDotEnvOptions; static;
-  End;
+  end;
   {$ENDREGION}
 
 
   iDotEnv = interface
     ['{23318557-DA37-4030-B393-05EBC885E84C}']
-    function Get(const KeyName:string; const DefaultKeyValue:string=''):string; overload;
+    function Get(const KeyName:string; const DefaultKeyValue:string = ''):string; overload;
     function Get(const KeyName:string; const DefaultKeyValue:string; const EnvVarOptions:TEnvVarOptions):string; overload;
 
     function TryGet(const KeyName:string; out KeyValue:string):Boolean; overload;
@@ -106,12 +107,13 @@ function NewDotEnv:iDotEnv; overload;
 function NewDotEnv(const Options:TDotEnvOptions):iDotEnv; overload;
 
 
-  {$IFDEF radDotEnv_SINGLETON}
+{$IFDEF radDotEnv_SINGLETON}
+var
   DotEnv:iDotEnv;
   {$IFEND}
 
-
 implementation
+
 uses
   System.Classes,
   {$IFDEF MSWINDOWS}
@@ -126,7 +128,7 @@ var
   LoadGuard:TObject;
 
 type
-  TNameValueMap = TDictionary<string, string>;  //Add + 1 to: https://embt.atlassian.net/servicedesk/customer/portal/1/RSS-1862
+  TNameValueMap = TDictionary<string, string>; // Add + 1 to: https://embt.atlassian.net/servicedesk/customer/portal/1/RSS-1862
   TStringKeyValue = TPair<string, string>;
 
 
@@ -143,17 +145,17 @@ type
   strict protected
     procedure Log(const msg:string);
 
-    function FormattedKeyName(const KeyName:string; const KeyNameCaseOption:TKeyNameCaseOption):String;
-    function FormattedKeyValue(const KeyValue:string; const KeyValueTrimOption:TKeyValueTrimOption):String;
+    function FormattedKeyName(const KeyName:string; const KeyNameCaseOption:TKeyNameCaseOption):string;
+    function FormattedKeyValue(const KeyValue:string; const KeyValueTrimOption:TKeyValueTrimOption):string;
 
-    function TryGetFromFile(const StdKeyName:String; out KeyValue:string):Boolean;
-    function TryGetFromSys(const StdKeyName:String; out KeyValue:string):Boolean;
+    function TryGetFromFile(const StdKeyName:string; out KeyValue:string):Boolean;
+    function TryGetFromSys(const StdKeyName:string; out KeyValue:string):Boolean;
   public
     constructor Create; overload;
     constructor Create(const Options:TDotEnvOptions); overload;
     destructor Destroy; override;
 
-    function Get(const KeyName:string; const DefaultKeyValue:string=''):string; overload;
+    function Get(const KeyName:string; const DefaultKeyValue:string = ''):string; overload;
     function Get(const KeyName:string; const DefaultKeyValue:string; const EnvVarOptions:TEnvVarOptions):string; overload;
 
     function TryGet(const KeyName:string; out KeyValue:string):Boolean; overload;
@@ -178,6 +180,7 @@ begin
   Result := NewDotEnv(TDotEnvOptions.DefaultOptions);
 end;
 
+
 function NewDotEnv(const Options:TDotEnvOptions):iDotEnv;
 begin
   Result := TDotEnv.Create(Options);
@@ -192,11 +195,10 @@ begin
   Result.EnvVarOptions.RetrieveOption := defRetrieveOption;
   Result.SetOption := defSetOption;
   Result.EnvFileName := defEnvFilename;
-  Result.EnvSearchPaths := [ExtractFilePath(ParamStr(0))]; //toreview: ParamStr(0) seems more generally appropriate than GetModuleName(HInstance)
+  Result.EnvSearchPaths := [ExtractFilePath(ParamStr(0))]; // toreview: ParamStr(0) seems more generally appropriate than GetModuleName(HInstance)
   Result.FileEncoding := TEncoding.UTF8;
   Result.LogProc := nil;
 end;
-
 
 
 constructor TDotEnv.Create;
@@ -205,11 +207,13 @@ begin
   Create(TDotEnvOptions.DefaultOptions);
 end;
 
+
 constructor TDotEnv.Create(const Options:TDotEnvOptions);
 begin
   inherited Create;
   fOptions := Options;
 end;
+
 
 destructor TDotEnv.Destroy;
 begin
@@ -290,8 +294,7 @@ begin
 end;
 
 
-
-function TDotEnv.FormattedKeyName(const KeyName:string; const KeyNameCaseOption:TKeyNameCaseOption):String;
+function TDotEnv.FormattedKeyName(const KeyName:string; const KeyNameCaseOption:TKeyNameCaseOption):string;
 begin
   if KeyNameCaseOption = TKeyNameCaseOption.AlwaysToUpperInvariant then
   begin
@@ -301,7 +304,7 @@ begin
   begin
     Result := KeyName.Trim.ToUpper;
   end
-  else {UpperInvariantWindowsOtherwiseAsIs}
+  else { UpperInvariantWindowsOtherwiseAsIs }
   begin
     Assert(KeyNameCaseOption = TKeyNameCaseOption.UpperInvariantWindowsOtherwiseAsIs, Format('Unknown KeyNameCaseOption (%d) in TDotEnv.FormattedKeyName', [Ord(KeyNameCaseOption)]));
     {$IFDEF MSWINDOWS}
@@ -313,7 +316,7 @@ begin
 end;
 
 
-function TDotEnv.FormattedKeyValue(const KeyValue:string; const KeyValueTrimOption:TKeyValueTrimOption):String;
+function TDotEnv.FormattedKeyValue(const KeyValue:string; const KeyValueTrimOption:TKeyValueTrimOption):string;
 begin
   if KeyValueTrimOption = TKeyValueTrimOption.AlwaysRightTrim then
   begin
@@ -323,7 +326,7 @@ begin
   begin
     Result := KeyValue.Trim;
   end
-  else {NeverTrim}
+  else { NeverTrim }
   begin
     Assert(KeyValueTrimOption = TKeyValueTrimOption.NeverTrim, Format('Unknown KeyValueTrimOption (%d) in TDotEnv.FormattedKeyValue', [Ord(KeyValueTrimOption)]));
     Result := KeyValue;
@@ -331,7 +334,7 @@ begin
 end;
 
 
-function TDotEnv.Get(const KeyName:string; const DefaultKeyValue:string=''):string;
+function TDotEnv.Get(const KeyName:string; const DefaultKeyValue:string = ''):string;
 begin
   Result := Get(KeyName, DefaultKeyValue, fOptions.EnvVarOptions);
 end;
@@ -354,7 +357,7 @@ end;
 
 function TDotEnv.TryGet(const KeyName:string; out KeyValue:string; const EnvVarOptions:TEnvVarOptions):Boolean;
 var
-  StdKeyName:String;
+  StdKeyName:string;
 begin
   if not Assigned(fMap) then
   begin
@@ -364,10 +367,13 @@ begin
   StdKeyName := FormattedKeyName(KeyName, EnvVarOptions.KeyNameCaseOption);
 
   case EnvVarOptions.RetrieveOption of
-    TRetrieveOption.OnlyFromFile: Result := TryGetFromFile(StdKeyName, KeyValue);
-    TRetrieveOption.OnlyFromSys: Result := TryGetFromSys(StdKeyName, KeyValue);
-    TRetrieveOption.PreferSys: Result := TryGetFromSys(StdKeyName, KeyValue) or TryGetFromFile(StdKeyName, KeyValue);
-  else {PreferFile}
+    TRetrieveOption.OnlyFromFile:
+      Result := TryGetFromFile(StdKeyName, KeyValue);
+    TRetrieveOption.OnlyFromSys:
+      Result := TryGetFromSys(StdKeyName, KeyValue);
+    TRetrieveOption.PreferSys:
+      Result := TryGetFromSys(StdKeyName, KeyValue) or TryGetFromFile(StdKeyName, KeyValue);
+  else { PreferFile }
     Assert(EnvVarOptions.RetrieveOption = TRetrieveOption.PreferFile, Format('Unknown RetrieveOption (%d) in TDotEnv.TryGet', [Ord(EnvVarOptions.RetrieveOption)]));
     Result := TryGetFromFile(StdKeyName, KeyValue) or TryGetFromSys(StdKeyName, KeyValue);
   end;
@@ -376,13 +382,13 @@ begin
 end;
 
 
-function TDotEnv.TryGetFromFile(const StdKeyName:String; out KeyValue:string):Boolean;
+function TDotEnv.TryGetFromFile(const StdKeyName:string; out KeyValue:string):Boolean;
 begin
   Result := fMap.TryGetValue(StdKeyName, KeyValue);
 end;
 
 
-function TDotEnv.TryGetFromSys(const StdKeyName:String; out KeyValue:string):Boolean;
+function TDotEnv.TryGetFromSys(const StdKeyName:string; out KeyValue:string):Boolean;
 begin
   KeyValue := GetEnvironmentVariable(StdKeyName);
   Result := not KeyValue.Trim.IsEmpty;
@@ -398,6 +404,7 @@ begin
     TMonitor.Exit(LoadGuard);
   end;
 end;
+
 
 procedure TDotEnv.GuardedSearchFiles;
 var
@@ -421,30 +428,33 @@ begin
   GuardedSetSystemEnvironmentVariables;
 end;
 
-procedure XPlatSetEnvironmentVariable(const AName, AValue: String);
+
+procedure XPlatSetEnvironmentVariable(const AName, AValue:string);
 {$IFDEF POSIX}
 var
-  s1, s2: RawByteString;
-{$ENDIF}
+  s1, s2:RawByteString;
+  {$ENDIF}
 begin
-{$IFDEF MSWINDOWS}
+  {$IFDEF MSWINDOWS}
   SetEnvironmentVariable(PChar(AName), PChar(AValue));
-{$ENDIF}
-{$IFDEF POSIX}
+  {$ENDIF}
+  {$IFDEF POSIX}
   s1 := TFDEncoder.Enco(AName, ecUTF8);
   s2 := TFDEncoder.Enco(AValue, ecUTF8);
   setenv(MarshaledAString(PByte(s1)), MarshaledAString(PByte(s2)), 1);
-{$ENDIF}
+  {$ENDIF}
 end;
+
 
 procedure TDotEnv.GuardedSetSystemEnvironmentVariables;
 var
   KeyPair:TStringKeyValue;
   KeyPairArray:TArray<TStringKeyValue>;
   SetVar:Boolean;
-  CurrentValue:String;
+  CurrentValue:string;
 begin
-  if fOptions.SetOption = TSetOption.NeverSet then Exit;
+  if fOptions.SetOption = TSetOption.NeverSet then
+    Exit;
 
   KeyPairArray := fMap.ToArray;
   for KeyPair in KeyPairArray do
@@ -464,8 +474,8 @@ begin
 end;
 
 
-//todo: Create enhanced parser  (embedded vars, inline comments)
-procedure TDotEnv.GuardedParseDotEnvFileContents(const Contents:String);
+// todo: Create enhanced parser  (embedded vars, inline comments)
+procedure TDotEnv.GuardedParseDotEnvFileContents(const Contents:string);
 var
   sl:TStringList;
   i:Integer;
@@ -475,7 +485,7 @@ begin
   sl := TStringList.Create;
   try
     sl.Text := Contents;
-    for i := 0 to sl.Count-1 do
+    for i := 0 to sl.Count - 1 do
     begin
       KeyName := sl.Names[i].Trim;
       if (not KeyName.IsEmpty) and (not KeyName.StartsWith('#')) then
@@ -492,13 +502,15 @@ end;
 
 
 initialization
-  LoadGuard := TObject.Create;
-  {$IFDEF radDotEnv_SINGLETON}
-  DotEnv := NewDotEnv;
-  {$IFEND}
+
+LoadGuard := TObject.Create;
+{$IFDEF radDotEnv_SINGLETON}
+DotEnv := NewDotEnv;
+{$IFEND}
 
 finalization
-  LoadGuard.Free;
+
+LoadGuard.Free;
 
 
 end.
