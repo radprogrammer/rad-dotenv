@@ -24,12 +24,6 @@ type
     UpperInvariantWindowsOtherwiseAsIs);  //Environment variables on other systems can be case sensitive, but it can get murky...
 
 
-  TKeyValueTrimOption = (
-    AlwaysRightTrim,                //Operating systems may allow trailing spaces, but many scripts/apps fail to provide for that
-    AlwaysLeftAndRightTrim,
-    NeverTrim);
-
-
   TRetrieveOption = (
     /// <summary> Try getting variable from DotEnv values, and if not found, try getting from system environment</summary>
     PreferFile,
@@ -45,7 +39,6 @@ type
   TEnvVarOptions = record
     RetrieveOption:TRetrieveOption;
     KeyNameCaseOption:TKeyNameCaseOption;
-    KeyValueTrimOption:TKeyValueTrimOption;
   end;
 
 
@@ -66,7 +59,6 @@ type
   const
     defEnvFilename:string = '.env';
     defKeyNameCaseOption:TKeyNameCaseOption = TKeyNameCaseOption.AlwaysToUpperInvariant;
-    defKeyValueTrimOption:TKeyValueTrimOption = TKeyValueTrimOption.AlwaysRightTrim;
     defRetrieveOption:TRetrieveOption = TRetrieveOption.PreferFile;
     defSetOption:TSetOption = TSetOption.DoNotOvewrite;
   public
@@ -91,7 +83,6 @@ type
 
     {$REGION Optional usage for functional style initialization}
     function UseKeyNameCaseOption(const KeyNameCaseOption:TKeyNameCaseOption):iDotEnv;
-    function UseKeyValueTrimOption(const KeyValueTrimOption:TKeyValueTrimOption):iDotEnv;
     function UseRetrieveOption(const RetrieveOption:TRetrieveOption):iDotEnv;
     function UseSetOption(const SetOption:TSetOption):iDotEnv;
     function UseEnvFileName(const EnvFileName:string):iDotEnv;
@@ -146,7 +137,7 @@ type
     procedure Log(const msg:string);
 
     function FormattedKeyName(const KeyName:string; const KeyNameCaseOption:TKeyNameCaseOption):string;
-    function FormattedKeyValue(const KeyValue:string; const KeyValueTrimOption:TKeyValueTrimOption):string;
+    function FormattedKeyValue(const KeyValue:string):string;
 
     function TryGetFromFile(const StdKeyName:string; out KeyValue:string):Boolean;
     function TryGetFromSys(const StdKeyName:string; out KeyValue:string):Boolean;
@@ -163,7 +154,6 @@ type
 
     {$REGION Optional usage for functional style initialization}
     function UseKeyNameCaseOption(const KeyNameCaseOption:TKeyNameCaseOption):iDotEnv;
-    function UseKeyValueTrimOption(const KeyValueTrimOption:TKeyValueTrimOption):iDotEnv;
     function UseRetrieveOption(const RetrieveOption:TRetrieveOption):iDotEnv;
     function UseSetOption(const SetOption:TSetOption):iDotEnv;
     function UseEnvFileName(const EnvFileName:string):iDotEnv;
@@ -191,7 +181,6 @@ class function TDotEnvOptions.DefaultOptions:TDotEnvOptions;
 begin
   Result := Default(TDotEnvOptions);
   Result.EnvVarOptions.KeyNameCaseOption := defKeyNameCaseOption;
-  Result.EnvVarOptions.KeyValueTrimOption := defKeyValueTrimOption;
   Result.EnvVarOptions.RetrieveOption := defRetrieveOption;
   Result.SetOption := defSetOption;
   Result.EnvFileName := defEnvFilename;
@@ -234,13 +223,6 @@ end;
 function TDotEnv.UseKeyNameCaseOption(const KeyNameCaseOption:TKeyNameCaseOption):iDotEnv;
 begin
   fOptions.EnvVarOptions.KeyNameCaseOption := KeyNameCaseOption;
-  Result := self;
-end;
-
-
-function TDotEnv.UseKeyValueTrimOption(const KeyValueTrimOption:TKeyValueTrimOption):iDotEnv;
-begin
-  fOptions.EnvVarOptions.KeyValueTrimOption := KeyValueTrimOption;
   Result := self;
 end;
 
@@ -316,21 +298,9 @@ begin
 end;
 
 
-function TDotEnv.FormattedKeyValue(const KeyValue:string; const KeyValueTrimOption:TKeyValueTrimOption):string;
+function TDotEnv.FormattedKeyValue(const KeyValue:string):string;
 begin
-  if KeyValueTrimOption = TKeyValueTrimOption.AlwaysRightTrim then
-  begin
-    Result := KeyValue.TrimRight;
-  end
-  else if KeyValueTrimOption = TKeyValueTrimOption.AlwaysLeftAndRightTrim then
-  begin
-    Result := KeyValue.Trim;
-  end
-  else { NeverTrim }
-  begin
-    Assert(KeyValueTrimOption = TKeyValueTrimOption.NeverTrim, Format('Unknown KeyValueTrimOption (%d) in TDotEnv.FormattedKeyValue', [Ord(KeyValueTrimOption)]));
-    Result := KeyValue;
-  end;
+  Result := KeyValue.Trim;
 end;
 
 
@@ -378,7 +348,7 @@ begin
     Result := TryGetFromFile(StdKeyName, KeyValue) or TryGetFromSys(StdKeyName, KeyValue);
   end;
 
-  KeyValue := FormattedKeyValue(KeyValue, EnvVarOptions.KeyValueTrimOption);
+  KeyValue := FormattedKeyValue(KeyValue);
 end;
 
 
@@ -491,7 +461,7 @@ begin
       if (not KeyName.IsEmpty) and (not KeyName.StartsWith('#')) then
       begin
         KeyName := FormattedKeyName(KeyName, fOptions.EnvVarOptions.KeyNameCaseOption);
-        KeyValue := FormattedKeyValue(sl.ValueFromIndex[i], fOptions.EnvVarOptions.KeyValueTrimOption);
+        KeyValue := FormattedKeyValue(sl.ValueFromIndex[i]);
         fMap.AddOrSetValue(KeyName, KeyValue);
       end;
     end;
