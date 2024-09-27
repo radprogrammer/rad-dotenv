@@ -1,6 +1,7 @@
 # rad-dotenv
 ## DotEnv file (.env) support for Delphi
 
+- Work-in-progress, overly-simplified parser to be replaced
 - Add DotEnv file support in your Delphi projects by including one source code file from this repository
 
 
