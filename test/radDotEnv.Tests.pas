@@ -55,6 +55,10 @@ type
     [TestCase('SingleQuotedValueNotTrimmed', 'key='' value  '',key, value  ')]
     [TestCase('SingleQuotedValueWithCommentCharacter', 'key=''value#keep'',key,value#keep')]
     [TestCase('SingleQuotedValueWithDoubleQuote', 'key=''value"keep'',key,value"keep')]
+    [TestCase('DoubleQuotedMultiLineValue', 'key="line1' + sLineBreak + ' Line2 #val ' + sLineBreak + '#Line3",key,line1' + sLineBreak + ' Line2 #val ' + sLineBreak + '#Line3')]
+    [TestCase('DoubleQuotedNoEndingQuoteKeyIgnored', 'key="line1' + sLineBreak + ' Line2 #val ' + sLineBreak + '#Line3,key,')]
+    [TestCase('SingleQuotedMultiLineValue', 'key=''line1' + sLineBreak + ' Line2 #val ' + sLineBreak + '#Line3'',key,line1' + sLineBreak + ' Line2 #val ' + sLineBreak + '#Line3')]
+    [TestCase('SingleQuotedNoEndingQuoteKeyIgnored', 'key=''line1' + sLineBreak + ' Line2 #val ' + sLineBreak + '#Line3,key,')]
 {$ENDIF}
     procedure TestSingleKeyValue(const Contents:String; const KeyName:string; const ExpectedKeyValue:string);
 

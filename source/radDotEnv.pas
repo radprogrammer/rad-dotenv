@@ -573,7 +573,7 @@ begin
 
       StateQuotedValue:
         begin
-          if Current^ = WhichQuotedValue then
+          if Current^ = WhichQuotedValue then //includes all characters (including end-of-line chars) for multi-line values
           begin
             Value := Copy(Start, 2, Current-Start-1);
             AddKeyPair(Key, Value, {LeaveKeyValueAsIs=}True);
@@ -597,7 +597,7 @@ begin
     end;
   end;
 
-  if (not Trim(Key).IsEmpty) and (State in [StateValue, StateQuotedValue]) then
+  if (not Trim(Key).IsEmpty) and (State = StateValue) then
   begin
     AddKeyPair(Key, Start);
   end;
