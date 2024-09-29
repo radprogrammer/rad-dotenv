@@ -26,14 +26,14 @@ type
 
   TRetrieveOption = (
     /// <summary> Try getting variable from DotEnv values, and if not found, try getting from system environment</summary>
-    PreferFile,
+    PreferDotEnv,
     /// <summary> Try getting from system environment, and if not found, try from DotEnv values</summary>
     PreferSys,
     /// <summary> Only access system environment variable values (do not use DotEnv values)</summary>
     /// <remarks> Some production systems never want to use DotEnv files and only utilize orchestrated system values/remarks>
     OnlyFromSys,
     /// <summary> Only get variable from DotEnv values (do not access system environment variables)</summary>
-    OnlyFromFile);
+    OnlyFromDotEnv);
 
 
   TEnvVarOptions = record
@@ -59,7 +59,7 @@ type
   const
     defEnvFilename:string = '.env';
     defKeyNameCaseOption:TKeyNameCaseOption = TKeyNameCaseOption.AlwaysToUpperInvariant;
-    defRetrieveOption:TRetrieveOption = TRetrieveOption.PreferFile;
+    defRetrieveOption:TRetrieveOption = TRetrieveOption.PreferDotEnv;
     defSetOption:TSetOption = TSetOption.DoNotOvewrite;
   public
     EnvVarOptions:TEnvVarOptions;
@@ -90,6 +90,7 @@ type
     function UseFileEncoding(const FileEncoding:TEncoding):iDotEnv;
     function UseLogProc(const LogProc:TProc<string>):iDotEnv;
     function Load:iDotEnv;
+    function LoadFromString(const DotEnvContents:string):iDotEnv;
     {$ENDREGION}
   end;
 
@@ -113,7 +114,8 @@ uses
   {$IFDEF POSIX}
   Posix.Stdlib,
   {$ENDIF}
-  System.IOUtils;
+  System.IOUtils,
+  System.RegularExpressions;
 
 var
   LoadGuard:TObject;
@@ -121,25 +123,28 @@ var
 type
   TNameValueMap = TDictionary<string, string>; // Add + 1 to: https://embt.atlassian.net/servicedesk/customer/portal/1/RSS-1862
   TStringKeyValue = TPair<string, string>;
+  TDotEnvSource = (FromFile, FromString);
 
 
   TDotEnv = class(TInterfacedObject, iDotEnv)
   private const
     LogPrefix = '(dotenv) ';
+    SingleQuotedChar = '''';
+    DoubleQuotedChar = '"';
   strict private
     fMap:TNameValueMap;
     fOptions:TDotEnvOptions;
-    procedure EnsureLoaded;
+    procedure EnsureLoaded(const DotEnvSource:TDotEnvSource; const Contents:string='');
     procedure GuardedSearchFiles;
-    procedure GuardedParseDotEnvFileContents(const Contents:string);
     procedure GuardedSetSystemEnvironmentVariables;
+    procedure GuardedParseDotEnvFileContents(const Contents:string);
   strict protected
     procedure Log(const msg:string);
 
+    procedure AddKeyPair(const KeyName:string; const KeyValue:string; const LeaveKeyValueAsIs:Boolean=False);
     function FormattedKeyName(const KeyName:string; const KeyNameCaseOption:TKeyNameCaseOption):string;
-    function FormattedKeyValue(const KeyValue:string):string;
 
-    function TryGetFromFile(const StdKeyName:string; out KeyValue:string):Boolean;
+    function TryGetFromDotEnv(const StdKeyName:string; out KeyValue:string):Boolean;
     function TryGetFromSys(const StdKeyName:string; out KeyValue:string):Boolean;
   public
     constructor Create; overload;
@@ -161,6 +166,7 @@ type
     function UseLogProc(const LogProc:TProc<string>):iDotEnv;
     function UseFileEncoding(const FileEncoding:TEncoding):iDotEnv;
     function Load:iDotEnv;
+    function LoadFromString(const DotEnvContents:string):iDotEnv;
     {$ENDREGION}
   end;
 
@@ -201,6 +207,7 @@ constructor TDotEnv.Create(const Options:TDotEnvOptions);
 begin
   inherited Create;
   fOptions := Options;
+  fMap := nil;
 end;
 
 
@@ -271,8 +278,14 @@ end;
 
 function TDotEnv.Load:iDotEnv;
 begin
-  self.EnsureLoaded;
+  self.EnsureLoaded(TDotEnvSource.FromFile);
   Result := self;
+end;
+
+function TDotEnv.LoadFromString(const DotEnvContents:string):iDotEnv;
+begin
+  self.EnsureLoaded(TDotEnvSource.FromString, DotEnvContents);
+  Result := Self;
 end;
 
 
@@ -298,9 +311,12 @@ begin
 end;
 
 
-function TDotEnv.FormattedKeyValue(const KeyValue:string):string;
+procedure TDotEnv.AddKeyPair(const KeyName:string; const KeyValue:string; const LeaveKeyValueAsIs:Boolean=False);
 begin
-  Result := KeyValue.Trim;
+  if LeaveKeyValueAsIs then
+    fMap.AddOrSetValue(FormattedKeyName(KeyName, fOptions.EnvVarOptions.KeyNameCaseOption), KeyValue) //Quoted values keep spacing  Key=" value "
+  else
+    fMap.AddOrSetValue(FormattedKeyName(KeyName, fOptions.EnvVarOptions.KeyNameCaseOption), KeyValue.Trim);
 end;
 
 
@@ -331,28 +347,27 @@ var
 begin
   if not Assigned(fMap) then
   begin
-    EnsureLoaded;
+    EnsureLoaded(TDotEnvSource.FromFile);
   end;
 
   StdKeyName := FormattedKeyName(KeyName, EnvVarOptions.KeyNameCaseOption);
 
   case EnvVarOptions.RetrieveOption of
-    TRetrieveOption.OnlyFromFile:
-      Result := TryGetFromFile(StdKeyName, KeyValue);
+    TRetrieveOption.OnlyFromDotEnv:
+      Result := TryGetFromDotEnv(StdKeyName, KeyValue);
     TRetrieveOption.OnlyFromSys:
       Result := TryGetFromSys(StdKeyName, KeyValue);
     TRetrieveOption.PreferSys:
-      Result := TryGetFromSys(StdKeyName, KeyValue) or TryGetFromFile(StdKeyName, KeyValue);
-  else { PreferFile }
-    Assert(EnvVarOptions.RetrieveOption = TRetrieveOption.PreferFile, Format('Unknown RetrieveOption (%d) in TDotEnv.TryGet', [Ord(EnvVarOptions.RetrieveOption)]));
-    Result := TryGetFromFile(StdKeyName, KeyValue) or TryGetFromSys(StdKeyName, KeyValue);
+      Result := TryGetFromSys(StdKeyName, KeyValue) or TryGetFromDotEnv(StdKeyName, KeyValue);
+  else { PreferDotEnv }
+    Assert(EnvVarOptions.RetrieveOption = TRetrieveOption.PreferDotEnv, Format('Unknown RetrieveOption (%d) in TDotEnv.TryGet', [Ord(EnvVarOptions.RetrieveOption)]));
+    Result := TryGetFromDotEnv(StdKeyName, KeyValue) or TryGetFromSys(StdKeyName, KeyValue);
   end;
 
-  KeyValue := FormattedKeyValue(KeyValue);
 end;
 
 
-function TDotEnv.TryGetFromFile(const StdKeyName:string; out KeyValue:string):Boolean;
+function TDotEnv.TryGetFromDotEnv(const StdKeyName:string; out KeyValue:string):Boolean;
 begin
   Result := fMap.TryGetValue(StdKeyName, KeyValue);
 end;
@@ -365,11 +380,26 @@ begin
 end;
 
 
-procedure TDotEnv.EnsureLoaded;
+procedure TDotEnv.EnsureLoaded(const DotEnvSource:TDotEnvSource; const Contents:string='');
+
 begin
   TMonitor.Enter(LoadGuard);
   try
-    GuardedSearchFiles;
+    if not Assigned(fMap) then
+    begin
+      fMap := TNameValueMap.Create;
+    end;
+
+    if DotEnvSource = TDotEnvSource.FromFile then
+    begin
+      GuardedSearchFiles;
+    end
+    else
+    begin
+      GuardedParseDotEnvFileContents(Contents);
+    end;
+
+    GuardedSetSystemEnvironmentVariables;
   finally
     TMonitor.Exit(LoadGuard);
   end;
@@ -380,22 +410,24 @@ procedure TDotEnv.GuardedSearchFiles;
 var
   SearchPath:string;
   FullPathName:string;
+  Contents:string;
 begin
-  if not Assigned(fMap) then
-  begin
-    fMap := TNameValueMap.Create;
-  end;
-
   for SearchPath in fOptions.EnvSearchPaths do
   begin
     FullPathName := TPath.Combine(SearchPath, fOptions.EnvFileName);
     if TFile.Exists(FullPathName) then
     begin
-      GuardedParseDotEnvFileContents(TFile.ReadAllText(FullPathName, fOptions.FileEncoding));
+      try
+        Contents := TFile.ReadAllText(FullPathName, fOptions.FileEncoding);
+      except on E: Exception do
+        begin
+          Log(Format('Failed to load DotEnv file %s, exception: %s', [FullPathName, E.Message]));
+          Exit;
+        end;
+      end;
+      GuardedParseDotEnvFileContents(Contents);
     end;
   end;
-
-  GuardedSetSystemEnvironmentVariables;
 end;
 
 
@@ -429,7 +461,7 @@ begin
   KeyPairArray := fMap.ToArray;
   for KeyPair in KeyPairArray do
   begin
-    SetVar := True;
+    SetVar := True; //TSetOption.AlwaysSet
     if fOptions.SetOption = TSetOption.DoNotOvewrite then
     begin
       CurrentValue := GetEnvironmentVariable(KeyPair.Key);
@@ -444,29 +476,130 @@ begin
 end;
 
 
-// todo: Create enhanced parser  (embedded vars, inline comments)
 procedure TDotEnv.GuardedParseDotEnvFileContents(const Contents:string);
+type
+  TEnvState = (StateNormal, StateKey, StateValue, StateQuotedValue, StateIgnoreRestOfLine);
+
 var
-  sl:TStringList;
-  i:Integer;
-  KeyName:string;
-  KeyValue:string;
+  Start, Current:PChar;
+  State:TEnvState;
+  Key, Value:string;
+  WhichQuotedValue:Char;
+
+  procedure SetNormalState;
+  begin
+    State := StateNormal;
+    Key := '';
+    Value := '';
+    WhichQuotedValue := #0;
+    Start := Current;
+  end;
+
 begin
-  sl := TStringList.Create;
-  try
-    sl.Text := Contents;
-    for i := 0 to sl.Count - 1 do
-    begin
-      KeyName := sl.Names[i].Trim;
-      if (not KeyName.IsEmpty) and (not KeyName.StartsWith('#')) then
-      begin
-        KeyName := FormattedKeyName(KeyName, fOptions.EnvVarOptions.KeyNameCaseOption);
-        KeyValue := FormattedKeyValue(sl.ValueFromIndex[i]);
-        fMap.AddOrSetValue(KeyName, KeyValue);
-      end;
+  if Contents = '' then
+    Exit;
+
+  Start := PChar(Contents);
+  Current := Start;
+  SetNormalState;
+  while Current^ <> #0 do
+  begin
+    case State of
+      StateNormal:
+        begin
+          if CharInSet(Current^, [#10, #13, #32, #9]) then
+          begin
+            Inc(Current);
+            Continue;
+          end;
+          if Current^ = '#' then
+          begin
+            State := StateIgnoreRestOfLine;
+          end
+          else
+          begin
+            State := StateKey;
+          end;
+        end;
+
+      StateKey:
+        begin
+          if (Current^ = '=') then   {//toconsider: Option to allow "Key Value" pairs?     or CharInSet(Current^, [#32, #9]) then}
+          begin
+            Key := Copy(Start, 1, Current-Start);
+            State := StateValue;
+            Inc(Current);
+            Start := Current;
+          end
+          else if CharInSet(Current^, [#10, #13]) then
+          begin
+            // A key was started but no = found to set a value before end of line, so it gets ignored
+            Inc(Current);
+            SetNormalState;
+          end
+          else
+          begin
+            Inc(Current);
+          end;
+        end;
+
+      StateValue:
+        begin
+          if CharInSet(Current^, [TDotEnv.DoubleQuotedChar, TDotEnv.SingleQuotedChar]) then
+          begin
+            State := StateQuotedValue;
+            WhichQuotedValue := Current^;
+            Start := Current;
+            Inc(Current);
+          end
+          else if CharInSet(Current^, [#10, #13]) then
+          begin
+            Value := Copy(Start, 1, Current-Start);
+            AddKeyPair(Key, Value);
+            Inc(Current);
+            SetNormalState;
+          end
+          else if Current^ = '#' then
+          begin
+            Value := Copy(Start, 1, Current-Start);
+            AddKeyPair(Key, Value);
+            State := StateIgnoreRestOfLine;
+          end
+          else
+          begin
+            Inc(Current);
+          end;
+        end;
+
+      StateQuotedValue:
+        begin
+          if Current^ = WhichQuotedValue then
+          begin
+            Value := Copy(Start, 2, Current-Start-1);
+            AddKeyPair(Key, Value, {LeaveKeyValueAsIs=}True);
+            Inc(Current);
+            State := StateIgnoreRestOfLine;
+          end
+          else
+          begin
+            Inc(Current);
+          end;
+        end;
+
+      StateIgnoreRestOfLine:
+        begin
+          Inc(Current);
+          if CharInSet(Current^, [#10, #13]) then
+          begin
+            SetNormalState;
+          end;
+        end;
     end;
-  finally
-    sl.Free;
+  end;
+
+  if (not Trim(Key).IsEmpty) and (State in [StateValue, StateQuotedValue]) then
+  begin
+    AddKeyPair(Key, Start);
   end;
 end;
 
