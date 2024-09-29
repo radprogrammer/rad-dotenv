@@ -2,9 +2,22 @@
 ## DotEnv file (.env) support for Delphi
 
 - Add DotEnv file support in your Delphi projects by including one source code file from this repository
-- Compiles with DotEnv Draft RFC: https://github.com/radprogrammer/dotenv-RFC
+- Complies with DotEnv Draft RFC: https://github.com/radprogrammer/dotenv-RFC
   - TODO: multi-line value support
   - TODO: Variable interpolation with {$KEY}
+
+## Key Value Syntax Examples
+- `KEY=TEXT`  Value="TEXT"
+- `KEY=   Unquoted Values are trimmed   `  Value="Unquoted Values are trimmed"
+- `# line comments supported`
+- `KEY=TEXT #inline comments supported`  Value="TEXT"
+- `KEY="DoubleQuoted"`  Value="DoubleQuoted"
+- `KEY='SingleQuoted'`  Value="SingleQuoted"
+- `KEY TEXT improperly formatted lines are ignored`
+- `KEY="TEXT"InvalidTextIgnored"`  Value="TEXT"
+
+
+
 
 
 ## License
