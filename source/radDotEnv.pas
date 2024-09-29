@@ -37,14 +37,18 @@ type
 
 
   TEscapeSequenceInterpolationOption = (
-    SupportedInDoubleQuotedValues,
+    SupportEscapesInDoubleQuotedValues,
     EscapeSequencesNotSupported);
 
+  TVariableSubstitutionOption = (
+    SupportSubstutionInDoubleQuotedValues,
+    VariableSubstutionNotSupported);
 
   TEnvVarOptions = record
     RetrieveOption:TRetrieveOption;
     KeyNameCaseOption:TKeyNameCaseOption;
     EscapeSequenceInterpolationOption:TEscapeSequenceInterpolationOption;
+    VariableSubstitutionOption:TVariableSubstitutionOption;
   end;
 
 
@@ -67,7 +71,9 @@ type
     defKeyNameCaseOption:TKeyNameCaseOption = TKeyNameCaseOption.AlwaysToUpperInvariant;
     defRetrieveOption:TRetrieveOption = TRetrieveOption.PreferDotEnv;
     defSetOption:TSetOption = TSetOption.DoNotOvewrite;
-    defEscapeSequenceInterpolationOption = TEscapeSequenceInterpolationOption.SupportedInDoubleQuotedValues;
+    defEscapeSequenceInterpolationOption = TEscapeSequenceInterpolationOption.SupportEscapesInDoubleQuotedValues;
+    defVariableSubstitutionOption = TVariableSubstitutionOption.SupportSubstutionInDoubleQuotedValues;
+
   public
     EnvVarOptions:TEnvVarOptions;
     SetOption:TSetOption;
@@ -93,6 +99,7 @@ type
     function UseRetrieveOption(const RetrieveOption:TRetrieveOption):iDotEnv;
     function UseSetOption(const SetOption:TSetOption):iDotEnv;
     function UseEscapeSequenceInterpolationOption(const EscapeSequenceInterpolationOption:TEscapeSequenceInterpolationOption):iDotEnv;
+    function UseVariableSubstitutionOption(const VariableSubstitutionOption:TVariableSubstitutionOption):iDotEnv;
     function UseEnvFileName(const EnvFileName:string):iDotEnv;
     function UseEnvSearchPaths(const EnvSearchPaths:TArray<string>):iDotEnv;
     function UseFileEncoding(const FileEncoding:TEncoding):iDotEnv;
@@ -140,6 +147,7 @@ type
     SingleQuotedChar = '''';
     DoubleQuotedChar = '"';
     EscapeChar = '\';
+    KeyNameRegexPattern = '([a-zA-Z_]+[a-zA-Z0-9_]*)';
   strict private
     fMap:TNameValueMap;
     fOptions:TDotEnvOptions;
@@ -171,6 +179,7 @@ type
     function UseRetrieveOption(const RetrieveOption:TRetrieveOption):iDotEnv;
     function UseSetOption(const SetOption:TSetOption):iDotEnv;
     function UseEscapeSequenceInterpolationOption(const EscapeSequenceInterpolationOption:TEscapeSequenceInterpolationOption):iDotEnv;
+    function UseVariableSubstitutionOption(const VariableSubstitutionOption:TVariableSubstitutionOption):iDotEnv;
     function UseEnvFileName(const EnvFileName:string):iDotEnv;
     function UseEnvSearchPaths(const EnvSearchPaths:TArray<string>):iDotEnv;
     function UseLogProc(const LogProc:TProc<string>):iDotEnv;
@@ -265,6 +274,12 @@ begin
 end;
 
 
+function TDotEnv.UseVariableSubstitutionOption(const VariableSubstitutionOption:TVariableSubstitutionOption):iDotEnv;
+begin
+  fOptions.EnvVarOptions.VariableSubstitutionOption := VariableSubstitutionOption;
+  Result := self;
+end;
+
 
 function TDotEnv.UseEnvFileName(const EnvFileName:string):iDotEnv;
 begin
@@ -330,6 +345,30 @@ end;
 
 
 procedure TDotEnv.AddKeyPair(const KeyName:string; const KeyValue:string; const WhichQuotedValue:Char=#0);
+
+
+  function ResolveEmbeddedVariables(const Input:string):string;
+  var
+    Regex:TRegEx;
+    Match:TMatch;
+    VarName, ResolvedValue:string;
+  begin
+    Result := Input;
+
+    RegEx := TRegEx.Create('\$\{' + TDotEnv.KeyNameRegexPattern + '\}');
+    Match := Regex.Match(Result);
+    while Match.Success do
+    begin
+      VarName := Match.Groups[1].Value;
+
+      if not TryGet(VarName, ResolvedValue) then
+        ResolvedValue := ''; // Variable is not defined, default to empty string
+
+      Result := StringReplace(Result, Match.Value, ResolvedValue, []);
+      Match := Match.NextMatch;
+    end;
+  end;
+
   function UnescapeString(const Input:string):string;
   var
     Src, Dst:PChar;
@@ -400,9 +439,17 @@ begin
 
   if not (fOptions.EnvVarOptions.EscapeSequenceInterpolationOption = TEscapeSequenceInterpolationOption.EscapeSequencesNotSupported) then
   begin
-    if (WhichQuotedValue = TDotEnv.DoubleQuotedChar) and (fOptions.EnvVarOptions.EscapeSequenceInterpolationOption = TEscapeSequenceInterpolationOption.SupportedInDoubleQuotedValues) then
+    if (WhichQuotedValue = TDotEnv.DoubleQuotedChar) and (fOptions.EnvVarOptions.EscapeSequenceInterpolationOption = TEscapeSequenceInterpolationOption.SupportEscapesInDoubleQuotedValues) then
     begin
       InterpolatedValue := UnescapeString(InterpolatedValue);
+    end;
+  end;
+
+  if not (fOptions.EnvVarOptions.VariableSubstitutionOption = TVariableSubstitutionOption.VariableSubstutionNotSupported) then
+  begin
+    if (WhichQuotedValue = TDotEnv.DoubleQuotedChar) and (fOptions.EnvVarOptions.VariableSubstitutionOption = TVariableSubstitutionOption.SupportSubstutionInDoubleQuotedValues) then
+    begin
+      InterpolatedValue := ResolveEmbeddedVariables(InterpolatedValue);
     end;
   end;
 
@@ -667,7 +714,7 @@ begin
           if Current^ = WhichQuotedValue then //includes all characters (including end-of-line chars) for multi-line quoted values
           begin
             if (WhichQuotedValue = TDotEnv.DoubleQuotedChar)
-               and (fOptions.EnvVarOptions.EscapeSequenceInterpolationOption = TEscapeSequenceInterpolationOption.SupportedInDoubleQuotedValues)
+               and (fOptions.EnvVarOptions.EscapeSequenceInterpolationOption = TEscapeSequenceInterpolationOption.SupportEscapesInDoubleQuotedValues)
                and EscapePair then
             begin
               // This escaped double quote shouldn't end the value

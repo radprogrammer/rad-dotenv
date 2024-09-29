@@ -18,6 +18,14 @@
 - Escape sequence expansion supported within double-quoted values (option can be disabled)
   - `KEY="Line1\nLine2"  Value = "Line1{LF}Line2"
   - `KEY="Line1\r\nLine2"  Value = "Line1{CRLF}Line2"
+  - `KEY="Line1\"Line2"  Value = "Line1"Line2"
+  - `KEY="Line1\\Line2"  Value = "Line1\Line2"
+
+- `${KEY}` variable substitution supported within double-quoted values (option can be disabled)
+````
+KEY1=VALUE1
+KEY2=ValueFromKey1=$(KEY1)   # Value="ValueFromKey1=VALUE1"
+````
 
 - Either double-quoted or single-quoted multi-line values supported
 ````
