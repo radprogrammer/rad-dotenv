@@ -7,8 +7,8 @@ unit radDotEnv;
 
 interface
 
-// toreview: Open issue, may change default behavior in the future  https://github.com/radprogrammer/rad-dotenv/issues/1
-{ .$DEFINE radDotEnv_SINGLETON }
+// Compiler define option to create a singleton DotEnv variable during initialization for ease of use
+{.$DEFINE radDotEnv_SINGLETON }
 
 uses
   System.SysUtils,
