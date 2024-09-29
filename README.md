@@ -3,7 +3,6 @@
 
 - Add DotEnv file support in your Delphi projects by including one source code file from this repository
 - Complies with DotEnv Draft RFC: https://github.com/radprogrammer/dotenv-RFC
-  - TODO: Variable interpolation with {$KEY}
 
 ## Key Value Syntax Examples
 - `KEY=TEXT`  Value="TEXT"
