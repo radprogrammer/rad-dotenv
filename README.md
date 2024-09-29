@@ -14,6 +14,15 @@
 - `KEY='SingleQuoted'`  Value="SingleQuoted"
 - `KEY TEXT improperly formatted lines are ignored`
 - `KEY="TEXT"InvalidTextIgnored"`  Value="TEXT"
+- Either double-quoted or single-quoted multi-line values supported
+````
+ONE=`First line
+Second line
+Third line`
+TWO="First line
+Second line
+Third line"
+````
 
 
 
