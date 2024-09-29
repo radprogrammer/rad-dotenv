@@ -36,9 +36,15 @@ type
     OnlyFromDotEnv);
 
 
+  TEscapeSequenceInterpolationOption = (
+    SupportedInDoubleQuotedValues,
+    EscapeSequencesNotSupported);
+
+
   TEnvVarOptions = record
     RetrieveOption:TRetrieveOption;
     KeyNameCaseOption:TKeyNameCaseOption;
+    EscapeSequenceInterpolationOption:TEscapeSequenceInterpolationOption;
   end;
 
 
@@ -61,6 +67,7 @@ type
     defKeyNameCaseOption:TKeyNameCaseOption = TKeyNameCaseOption.AlwaysToUpperInvariant;
     defRetrieveOption:TRetrieveOption = TRetrieveOption.PreferDotEnv;
     defSetOption:TSetOption = TSetOption.DoNotOvewrite;
+    defEscapeSequenceInterpolationOption = TEscapeSequenceInterpolationOption.SupportedInDoubleQuotedValues;
   public
     EnvVarOptions:TEnvVarOptions;
     SetOption:TSetOption;
@@ -85,6 +92,7 @@ type
     function UseKeyNameCaseOption(const KeyNameCaseOption:TKeyNameCaseOption):iDotEnv;
     function UseRetrieveOption(const RetrieveOption:TRetrieveOption):iDotEnv;
     function UseSetOption(const SetOption:TSetOption):iDotEnv;
+    function UseEscapeSequenceInterpolationOption(const EscapeSequenceInterpolationOption:TEscapeSequenceInterpolationOption):iDotEnv;
     function UseEnvFileName(const EnvFileName:string):iDotEnv;
     function UseEnvSearchPaths(const EnvSearchPaths:TArray<string>):iDotEnv;
     function UseFileEncoding(const FileEncoding:TEncoding):iDotEnv;
@@ -131,6 +139,7 @@ type
     LogPrefix = '(dotenv) ';
     SingleQuotedChar = '''';
     DoubleQuotedChar = '"';
+    EscapeChar = '\';
   strict private
     fMap:TNameValueMap;
     fOptions:TDotEnvOptions;
@@ -141,7 +150,7 @@ type
   strict protected
     procedure Log(const msg:string);
 
-    procedure AddKeyPair(const KeyName:string; const KeyValue:string; const LeaveKeyValueAsIs:Boolean=False);
+    procedure AddKeyPair(const KeyName:string; const KeyValue:string; const WhichQuotedValue:Char=#0);
     function FormattedKeyName(const KeyName:string; const KeyNameCaseOption:TKeyNameCaseOption):string;
 
     function TryGetFromDotEnv(const StdKeyName:string; out KeyValue:string):Boolean;
@@ -161,6 +170,7 @@ type
     function UseKeyNameCaseOption(const KeyNameCaseOption:TKeyNameCaseOption):iDotEnv;
     function UseRetrieveOption(const RetrieveOption:TRetrieveOption):iDotEnv;
     function UseSetOption(const SetOption:TSetOption):iDotEnv;
+    function UseEscapeSequenceInterpolationOption(const EscapeSequenceInterpolationOption:TEscapeSequenceInterpolationOption):iDotEnv;
     function UseEnvFileName(const EnvFileName:string):iDotEnv;
     function UseEnvSearchPaths(const EnvSearchPaths:TArray<string>):iDotEnv;
     function UseLogProc(const LogProc:TProc<string>):iDotEnv;
@@ -248,6 +258,14 @@ begin
 end;
 
 
+function TDotEnv.UseEscapeSequenceInterpolationOption(const EscapeSequenceInterpolationOption:TEscapeSequenceInterpolationOption):iDotEnv;
+begin
+  fOptions.EnvVarOptions.EscapeSequenceInterpolationOption := EscapeSequenceInterpolationOption;
+  Result := self;
+end;
+
+
+
 function TDotEnv.UseEnvFileName(const EnvFileName:string):iDotEnv;
 begin
   fOptions.EnvFileName := EnvFileName;
@@ -311,12 +329,84 @@ begin
 end;
 
 
-procedure TDotEnv.AddKeyPair(const KeyName:string; const KeyValue:string; const LeaveKeyValueAsIs:Boolean=False);
+procedure TDotEnv.AddKeyPair(const KeyName:string; const KeyValue:string; const WhichQuotedValue:Char=#0);
+  function UnescapeString(const Input:string):string;
+  var
+    Src, Dst:PChar;
+    Output:string;
+    Ch:Char;
+    Len:Integer;
+
+    function GetEscapedChar(var P:PChar):Char;
+    begin
+      Inc(P); // Skip the backslash
+      case P^ of
+        'n': // Line feed
+          Result := #10;
+        't': // Tab
+          Result := #9;
+        'r': // Carriage return
+          Result := #13;
+        EscapeChar:
+          Result := EscapeChar;
+        '"':
+          Result := '"';
+        '''':
+          Result := '''';
+      else
+        Result := P^;  //unknown, as-is
+      end;
+      Inc(P);
+    end;
+
+
+  begin
+    Len := Length(Input);
+    SetLength(Output, Len);
+    Src := PChar(Input);
+    Dst := PChar(Output);
+
+    while Src^ <> #0 do
+    begin
+      if Src^ = EscapeChar then
+      begin
+        Ch := GetEscapedChar(Src);
+        Dst^ := Ch;
+      end
+      else
+      begin
+        Dst^ := Src^;
+        Inc(Src);
+      end;
+      Inc(Dst);
+    end;
+
+    SetLength(Output, Dst - PChar(Output));
+    Result := Output;
+  end;
+
+
+var
+  InterpolatedValue:string;
 begin
-  if LeaveKeyValueAsIs then
-    fMap.AddOrSetValue(FormattedKeyName(KeyName, fOptions.EnvVarOptions.KeyNameCaseOption), KeyValue) //Quoted values keep spacing  Key=" value "
+  if WhichQuotedValue = #0 then
+  begin
+    InterpolatedValue := KeyValue.Trim;  //Unquoted values are always trimmed
+  end
   else
-    fMap.AddOrSetValue(FormattedKeyName(KeyName, fOptions.EnvVarOptions.KeyNameCaseOption), KeyValue.Trim);
+  begin
+    InterpolatedValue := KeyValue;  //Quoted values keep spacing  Key=" value "
+  end;
+
+  if not (fOptions.EnvVarOptions.EscapeSequenceInterpolationOption = TEscapeSequenceInterpolationOption.EscapeSequencesNotSupported) then
+  begin
+    if (WhichQuotedValue = TDotEnv.DoubleQuotedChar) and (fOptions.EnvVarOptions.EscapeSequenceInterpolationOption = TEscapeSequenceInterpolationOption.SupportedInDoubleQuotedValues) then
+    begin
+      InterpolatedValue := UnescapeString(InterpolatedValue);
+    end;
+  end;
+
+  fMap.AddOrSetValue(FormattedKeyName(KeyName, fOptions.EnvVarOptions.KeyNameCaseOption), InterpolatedValue);
 end;
 
 
@@ -485,6 +575,7 @@ var
   State:TEnvState;
   Key, Value:string;
   WhichQuotedValue:Char;
+  EscapePair:Boolean;
 
   procedure SetNormalState;
   begin
@@ -493,6 +584,7 @@ var
     Value := '';
     WhichQuotedValue := #0;
     Start := Current;
+    EscapePair := False;
   end;
 
 begin
@@ -531,9 +623,8 @@ begin
             Inc(Current);
             Start := Current;
           end
-          else if CharInSet(Current^, [#10, #13]) then
+          else if CharInSet(Current^, [#10, #13]) then  // A key was started but no = found to set a value before end of line, so it gets ignored
           begin
-            // A key was started but no = found to set a value before end of line, so it gets ignored
             Inc(Current);
             SetNormalState;
           end
@@ -545,21 +636,21 @@ begin
 
       StateValue:
         begin
-          if CharInSet(Current^, [TDotEnv.DoubleQuotedChar, TDotEnv.SingleQuotedChar]) then
+          if CharInSet(Current^, [TDotEnv.DoubleQuotedChar, TDotEnv.SingleQuotedChar]) then  //start quoted value
           begin
             State := StateQuotedValue;
             WhichQuotedValue := Current^;
             Start := Current;
             Inc(Current);
           end
-          else if CharInSet(Current^, [#10, #13]) then
+          else if CharInSet(Current^, [#10, #13]) then  //unquoted value ends with end of line characters
           begin
             Value := Copy(Start, 1, Current-Start);
             AddKeyPair(Key, Value);
             Inc(Current);
             SetNormalState;
           end
-          else if Current^ = '#' then
+          else if Current^ = '#' then  //inline comment starting, grab current unquoted value, ignore rest of line
           begin
             Value := Copy(Start, 1, Current-Start);
             AddKeyPair(Key, Value);
@@ -573,15 +664,27 @@ begin
 
       StateQuotedValue:
         begin
-          if Current^ = WhichQuotedValue then //includes all characters (including end-of-line chars) for multi-line values
+          if Current^ = WhichQuotedValue then //includes all characters (including end-of-line chars) for multi-line quoted values
           begin
-            Value := Copy(Start, 2, Current-Start-1);
-            AddKeyPair(Key, Value, {LeaveKeyValueAsIs=}True);
-            Inc(Current);
-            State := StateIgnoreRestOfLine;
+            if (WhichQuotedValue = TDotEnv.DoubleQuotedChar)
+               and (fOptions.EnvVarOptions.EscapeSequenceInterpolationOption = TEscapeSequenceInterpolationOption.SupportedInDoubleQuotedValues)
+               and EscapePair then
+            begin
+              // This escaped double quote shouldn't end the value
+              EscapePair := False;
+              Inc(Current);
+            end
+            else
+            begin
+              Value := Copy(Start, 2, Current-Start-1);
+              AddKeyPair(Key, Value, WhichQuotedValue);
+              Inc(Current);
+              State := StateIgnoreRestOfLine;
+            end;
           end
           else
           begin
+            EscapePair := (not EscapePair) and (Current^ = TDotEnv.EscapeChar);
             Inc(Current);
           end;
         end;

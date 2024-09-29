@@ -14,6 +14,11 @@
 - `KEY='SingleQuoted'`  Value="SingleQuoted"
 - `KEY TEXT improperly formatted lines are ignored`
 - `KEY="TEXT"InvalidTextIgnored"`  Value="TEXT"
+
+- Escape sequence expansion supported within double-quoted values (option can be disabled)
+  - `KEY="Line1\nLine2"  Value = "Line1{LF}Line2"
+  - `KEY="Line1\r\nLine2"  Value = "Line1{CRLF}Line2"
+
 - Either double-quoted or single-quoted multi-line values supported
 ````
 ONE=`First line
@@ -23,10 +28,6 @@ TWO="First line
 Second line
 Third line"
 ````
-
-
-
-
 
 ## License
 `rad-dotenv` is licensed under either of the following two licenses, at your discretion.

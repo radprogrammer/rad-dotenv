@@ -59,6 +59,28 @@ type
     [TestCase('DoubleQuotedNoEndingQuoteKeyIgnored', 'key="line1' + sLineBreak + ' Line2 #val ' + sLineBreak + '#Line3,key,')]
     [TestCase('SingleQuotedMultiLineValue', 'key=''line1' + sLineBreak + ' Line2 #val ' + sLineBreak + '#Line3'',key,line1' + sLineBreak + ' Line2 #val ' + sLineBreak + '#Line3')]
     [TestCase('SingleQuotedNoEndingQuoteKeyIgnored', 'key=''line1' + sLineBreak + ' Line2 #val ' + sLineBreak + '#Line3,key,')]
+    //Note: Escape sequeneces supported by default via defEscapeSequenceInterpolationOption
+    [TestCase('EscapedDoubleQuoted\n', 'key="value\n",key,value'+#10)]
+    [TestCase('EscapedDoubleQuoted\r', 'key="value\r",key,value'+#13)]
+    [TestCase('EscapedDoubleQuoted\t', 'key="value\t",key,value'+#9)]
+    [TestCase('EscapedDoubleQuoted\''', 'key="value\''",key,value''')]
+    [TestCase('EscapedDoubleQuoted\"', 'key="value\"",key,value"')]
+    [TestCase('EscapedDoubleQuoted\\', 'key="value\\",key,value\')]
+
+    [TestCase('EscapedDoubleQuoted\\\\', 'key="value\\\\",key,value\\')]
+    [TestCase('EscapedDoubleQuoted\\\"', 'key="value\\\"",key,value\"')]
+    [TestCase('EscapedDoubleQuoted\\\"\"', 'key="value\\\"\"",key,value\""')]
+    [TestCase('EscapedDoubleQuotedNoEndingQuote', 'key="value\",key,')]
+    [TestCase('EscapedDoubleQuotedInvalid\', 'key="value\X",key,valueX')]
+    [TestCase('EscapedDoubleQuotedInvalid\NoNull', 'key="value\0",key,value0')]
+    [TestCase('EscapedDoubleQuotedCRLF', 'key="Line1\r\nLine2",key,Line1' + #13#10 + 'Line2')]
+
+    [TestCase('EscapedSingleQuoted\nAsIs', 'key=''value\n'',key,value\n')]
+    [TestCase('EscapedSingleQuoted\rAsIs', 'key=''value\r'',key,value\r')]
+    [TestCase('EscapedSingleQuoted\tAsIs', 'key=''value\t'',key,value\t')]
+    [TestCase('EscapedSingleQuoted\''IsNoEndingQuote', 'key=''value\'''',key,value\')]
+    [TestCase('EscapedSingleQuoted\"AsIs', 'key=''value\"'',key,value\"')]
+    [TestCase('EscapedSingleQuoted\\AsIs', 'key=''value\\'',key,value\\')]
 {$ENDIF}
     procedure TestSingleKeyValue(const Contents:String; const KeyName:string; const ExpectedKeyValue:string);
 
