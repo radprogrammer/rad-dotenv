@@ -3,7 +3,8 @@
 
 - Add DotEnv file support in your Delphi projects by including one source code file from this repository
 - Compiles with DotEnv Draft RFC: https://github.com/radprogrammer/dotenv-RFC
-  TODO: multi-line value support
+  - TODO: multi-line value support
+  - TODO: Variable interpolation with {$KEY}
 
 
 ## License
