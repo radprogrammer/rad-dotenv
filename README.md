@@ -15,10 +15,10 @@
 - `KEY="TEXT"InvalidTextIgnored"`  Value="TEXT"
 
 - Escape sequence expansion supported within double-quoted values (option can be disabled)
-  - `KEY="Line1\nLine2"  Value = "Line1{LF}Line2"
-  - `KEY="Line1\r\nLine2"  Value = "Line1{CRLF}Line2"
-  - `KEY="Line1\"Line2"  Value = "Line1"Line2"
-  - `KEY="Line1\\Line2"  Value = "Line1\Line2"
+  - `KEY="Line1\nLine2"`  Value = "Line1{LF}Line2"
+  - `KEY="Line1\r\nLine2"`  Value = "Line1{CRLF}Line2"
+  - `KEY="Line1\"Line2"`  Value = "Line1"Line2"
+  - `KEY="Line1\\Line2"`  Value = "Line1\Line2"
 
 - `${KEY}` variable substitution supported within double-quoted values (option can be disabled)
 ````
