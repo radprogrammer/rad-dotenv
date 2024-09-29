@@ -3,7 +3,7 @@
 
 - Work-in-progress, overly-simplified parser to be replaced
 - Add DotEnv file support in your Delphi projects by including one source code file from this repository
-
+- Complies with DotEnv Draft RFC: https://github.com/radprogrammer/dotenv-RFC
 
 ## License
 `rad-dotenv` is licensed under either of the following two licenses, at your discretion.
