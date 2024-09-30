@@ -86,6 +86,7 @@ type
     [TestCase('UnknownVariableIsBlankByDefault', 'key="value${NonExistingVariableNameHere}test",key,valuetest')]
     [TestCase('UnknownVariableDefaultValueProvided', 'key="value${NonExistingVariableNameHere-DefValue}test",key,valueDefValuetest')]
 {$ENDIF}
+    [TestCase('SingleQuotedSimpleVariableSubstitutionIgnored', 'key1=value1' + sLineBreak + 'key2=''ValueFromKey1=${KEY1}.'',key2,ValueFromKey1=${KEY1}.')]
     procedure TestSingleKeyValue(const Contents:String; const KeyName:string; const ExpectedKeyValue:string);
 
 
