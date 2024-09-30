@@ -364,9 +364,9 @@ procedure TDotEnv.AddKeyPair(const KeyName:string; const KeyValue:string; const 
 
       VarName := Match.Groups[1].Value;
       DefaultValue := '';
-      if Match.Groups[1].Success and Match.Groups[3].Success then //${KEY-default} found, extract default value
+      if (Match.Groups[1].Success) and (Match.Groups.Count > 2) and Match.Groups[3].Success then //${KEY-default} found, extract default value
       begin
-        DefaultValue := Match.Groups[2].Value;
+        DefaultValue := Match.Groups[3].Value;
       end;
 
       if not TryGet(VarName, ResolvedValue) then

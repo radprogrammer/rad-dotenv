@@ -81,12 +81,11 @@ type
     [TestCase('EscapedSingleQuoted\''IsNoEndingQuote', 'key=''value\'''',key,value\')]
     [TestCase('EscapedSingleQuoted\"AsIs', 'key=''value\"'',key,value\"')]
     [TestCase('EscapedSingleQuoted\\AsIs', 'key=''value\\'',key,value\\')]
-
     //Note: this set of tests is configured "OnlyFromDotEnv" and "NeverSet"
     [TestCase('SimpleVariableSubstitution', 'key1=value1' + sLineBreak + 'key2="ValueFromKey1=${KEY1}.",key2,ValueFromKey1=value1.')]
     [TestCase('UnknownVariableIsBlankByDefault', 'key="value${NonExistingVariableNameHere}test",key,valuetest')]
+    [TestCase('UnknownVariableDefaultValueProvided', 'key="value${NonExistingVariableNameHere-DefValue}test",key,valueDefValuetest')]
 {$ENDIF}
-    [TestCase('UnknownVariableDefaultValueProvided', 'key="value${NonExistingVariableNameHere-Test}test",key,valuetest')]
     procedure TestSingleKeyValue(const Contents:String; const KeyName:string; const ExpectedKeyValue:string);
 
 
