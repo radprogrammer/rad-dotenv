@@ -208,6 +208,8 @@ begin
   Result := Default(TDotEnvOptions);
   Result.EnvVarOptions.KeyNameCaseOption := defKeyNameCaseOption;
   Result.EnvVarOptions.RetrieveOption := defRetrieveOption;
+  Result.EnvVarOptions.EscapeSequenceInterpolationOption := defEscapeSequenceInterpolationOption;
+  Result.EnvVarOptions.VariableSubstitutionOption := defVariableSubstitutionOption;
   Result.SetOption := defSetOption;
   Result.EnvFileName := defEnvFilename;
   Result.EnvSearchPaths := [ExtractFilePath(ParamStr(0))]; // toreview: ParamStr(0) seems more generally appropriate than GetModuleName(HInstance)
