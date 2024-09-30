@@ -9,6 +9,12 @@ uses
   DUnitX.TestFramework,
   radDotEnv;
 
+const
+  //Also used by radDotEnv.TestFileGenerator project
+  LargeGeneratedTestFileName = '.env.large';
+  LargeVariableCount = 5000;
+
+
 type
   [TestFixture]
   TTestDotEnv = class
@@ -85,10 +91,14 @@ type
     [TestCase('SimpleVariableSubstitution', 'key1=value1' + sLineBreak + 'key2="ValueFromKey1=${KEY1}.",key2,ValueFromKey1=value1.')]
     [TestCase('UnknownVariableIsBlankByDefault', 'key="value${NonExistingVariableNameHere}test",key,valuetest')]
     [TestCase('UnknownVariableDefaultValueProvided', 'key="value${NonExistingVariableNameHere-DefValue}test",key,valueDefValuetest')]
-{$ENDIF}
     [TestCase('SingleQuotedSimpleVariableSubstitutionIgnored', 'key1=value1' + sLineBreak + 'key2=''ValueFromKey1=${KEY1}.'',key2,ValueFromKey1=${KEY1}.')]
+{$ENDIF}
     procedure TestSingleKeyValue(const Contents:String; const KeyName:string; const ExpectedKeyValue:string);
 
+    [Test]
+    procedure TestVariableSubstitutionOption;
+    [Test]
+    procedure TestEscapeSequenceInterpolationOption;
 
 {$IFDEF ALLTESTS}
     [TestCase('EmptyContent', '')]
@@ -106,9 +116,17 @@ type
 {$ENDIF}
     procedure TestNoExceptionsOnJunkParse(const Contents:String);
 
+    [Test]
+    // Also tests custom EnvFileName option
+    // LargeFile created with radDotEnv.TestFileGenerator
+    procedure TestLargeFile;
+
   end;
 
 implementation
+uses
+  System.SysUtils,
+  System.IOUtils;
 
 
 procedure TTestDotEnv.SetUp;
@@ -133,6 +151,127 @@ begin
   fDotEnv.LoadFromString(Contents);
   Assert.AreEqual(ExpectedKeyValue, fDotEnv.Get(KeyName));
 end;
+
+procedure TTestDotEnv.TestLargeFile;
+var
+  i:integer;
+  Expected,Actual:string;
+begin
+  Assert.IsTrue(TFile.Exists(TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), LargeGeneratedTestFileName)), LargeGeneratedTestFileName + ' file not found');
+
+  fDotEnv := NewDotEnv
+            .UseEnvFileName(LargeGeneratedTestFileName)
+            .UseRetrieveOption(TRetrieveOption.OnlyFromDotEnv)
+            .UseSetOption(TSetOption.NeverSet)
+            .Load;
+
+  for i := 1 to LargeVariableCount do
+  begin
+    Expected := Format('Value_%d', [i]);
+    Actual := fDotEnv.Get(Format('VAR_%d', [i]), 'Default');
+    Assert.AreEqual(Expected, Actual);
+  end;
+
+end;
+
+procedure TTestDotEnv.TestVariableSubstitutionOption;
+const
+  Key1Name = 'KEYx';
+  Key1Value = 'VALUEx';
+
+  KeyQuotedName = 'KEYQ';
+  KeyUnquotedName = 'KEYU';
+  ValuePrefix = 'prefix';
+  ValueSuffix = 'suffix';
+
+  UnsubstitutedValue = ValuePrefix + '${' + Key1Name + '}' + ValueSuffix;
+  ExpectedSubstitutedValue = ValuePrefix + Key1Value + ValueSuffix;
+var
+  Option:TVariableSubstitutionOption;
+  DotEnv:iDotEnv;
+  DotEnvString:string;
+begin
+
+  DotEnvString := Format('%s=%s',   [Key1Name, Key1Value]) + sLineBreak +                  //KEYx=VALUEx
+                  Format('%s="%s"', [KeyQuotedName,   UnsubstitutedValue]) + sLineBreak +  //KEYQ=prefix${KEYx}suffix
+                  Format('%s=%s',   [KeyUnquotedName, UnsubstitutedValue]);                //KEYU=prefix${KEYx}suffix
+
+  for Option := Low(TVariableSubstitutionOption) to High(TVariableSubstitutionOption) do
+  begin
+    DotEnv := NewDotEnv
+             .UseRetrieveOption(TRetrieveOption.OnlyFromDotEnv)
+             .UseSetOption(TSetOption.NeverSet);
+
+    case Option of
+      TVariableSubstitutionOption.SupportSubstutionInDoubleQuotedValues:
+        begin
+          DotEnv.UseVariableSubstitutionOption(TVariableSubstitutionOption.SupportSubstutionInDoubleQuotedValues);   //Enabled by defVariableSubstitutionOption
+          DotEnv.LoadFromString(DotEnvString);
+          Assert.AreEqual(ExpectedSubstitutedValue, DotEnv.Get(KeyQuotedName));  //variable was substituted since Value was double quoted and option enabled
+          Assert.AreEqual(UnsubstitutedValue, DotEnv.Get(KeyUnquotedName));      //variable was not substituted since Value was not double quoted (Option only applies to DoubleQuoted Values)
+        end;
+      TVariableSubstitutionOption.VariableSubstutionNotSupported:
+        begin
+          DotEnv.UseVariableSubstitutionOption(TVariableSubstitutionOption.VariableSubstutionNotSupported);    //override to turn off option
+          DotEnv.LoadFromString(DotEnvString);
+          Assert.AreEqual(UnsubstitutedValue, DotEnv.Get(KeyQuotedName));       //variable was not substituted, regardless of quote state
+          Assert.AreEqual(UnsubstitutedValue, DotEnv.Get(KeyUnquotedName));     //variable was not substituted, regardless of quote state
+        end;
+    else
+      Assert.Fail('Unknown TVariableSubstitutionOption ' + Ord(Option).ToString);
+    end;
+
+    DotEnv := nil;
+  end;
+end;
+
+
+procedure TTestDotEnv.TestEscapeSequenceInterpolationOption;
+const
+  KeyQuotedName = 'KEYQ';
+  KeyUnquotedName = 'KEYU';
+  ValueWithEscapeSequence = 'VALUE\t';
+  ExpectedUnescapedValue = 'VALUE' + #9;
+var
+  Option:TEscapeSequenceInterpolationOption;
+  DotEnv:iDotEnv;
+  DotEnvString:string;
+begin
+
+  DotEnvString := Format('%s="%s"', [KeyQuotedName, ValueWithEscapeSequence]) + sLineBreak + //KEYQ="VALUE\t"
+                  Format('%s=%s',   [KeyUnquotedName, ValueWithEscapeSequence]);             //KEYU=VALUE\t
+
+  for Option := Low(TEscapeSequenceInterpolationOption) to High(TEscapeSequenceInterpolationOption) do
+  begin
+    DotEnv := NewDotEnv
+             .UseRetrieveOption(TRetrieveOption.OnlyFromDotEnv)
+             .UseSetOption(TSetOption.NeverSet);
+
+    case Option of
+      TEscapeSequenceInterpolationOption.SupportEscapesInDoubleQuotedValues:
+        begin
+          DotEnv.UseEscapeSequenceInterpolationOption(TEscapeSequenceInterpolationOption.SupportEscapesInDoubleQuotedValues);  //Enabled by defEscapeSequenceInterpolationOption
+          DotEnv.LoadFromString(DotEnvString);
+          Assert.AreEqual(ExpectedUnescapedValue, DotEnv.Get(KeyQuotedName));         //escapes replaced since Value was double quoted and option enabled
+          Assert.AreEqual(ValueWithEscapeSequence, DotEnv.Get(KeyUnquotedName));      //escapes not replaced since Value was not double quoted (Option only applies to DoubleQuoted Values)
+        end;
+      TEscapeSequenceInterpolationOption.EscapeSequencesNotSupported:
+        begin
+          DotEnv.UseEscapeSequenceInterpolationOption(TEscapeSequenceInterpolationOption.EscapeSequencesNotSupported);        //override to turn off option
+          DotEnv.LoadFromString(DotEnvString);
+          Assert.AreEqual(ValueWithEscapeSequence, DotEnv.Get(KeyQuotedName));       //escapes not replaced, regardless of quote state
+          Assert.AreEqual(ValueWithEscapeSequence, DotEnv.Get(KeyUnquotedName));     //escapes not replaced, regardless of quote state
+        end;
+    else
+      Assert.Fail('Unknown TEscapeSequenceInterpolationOption ' + Ord(Option).ToString);
+    end;
+
+    DotEnv := nil;
+  end;
+end;
+
+
+
 
 initialization
   TDUnitX.RegisterTestFixture(TTestDotEnv);

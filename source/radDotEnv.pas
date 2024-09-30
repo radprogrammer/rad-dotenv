@@ -73,7 +73,6 @@ type
     defSetOption:TSetOption = TSetOption.DoNotOvewrite;
     defEscapeSequenceInterpolationOption = TEscapeSequenceInterpolationOption.SupportEscapesInDoubleQuotedValues;
     defVariableSubstitutionOption = TVariableSubstitutionOption.SupportSubstutionInDoubleQuotedValues;
-
   public
     EnvVarOptions:TEnvVarOptions;
     SetOption:TSetOption;
