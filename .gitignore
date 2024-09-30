@@ -83,3 +83,9 @@ modules/
 
 # DotEnv environment settings
 .env
+
+# Testing config files for Delphi Code Coverage / Test Insight config
+*.ini
+*.log
+# contains local paths in Delphi Code Coverage project file
+*.dccp
