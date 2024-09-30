@@ -86,6 +86,7 @@ type
     [TestCase('SimpleVariableSubstitution', 'key1=value1' + sLineBreak + 'key2="ValueFromKey1=${KEY1}.",key2,ValueFromKey1=value1.')]
     [TestCase('UnknownVariableIsBlankByDefault', 'key="value${NonExistingVariableNameHere}test",key,valuetest')]
 {$ENDIF}
+    [TestCase('UnknownVariableDefaultValueProvided', 'key="value${NonExistingVariableNameHere-Test}test",key,valuetest')]
     procedure TestSingleKeyValue(const Contents:String; const KeyName:string; const ExpectedKeyValue:string);
 
 

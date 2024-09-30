@@ -25,6 +25,11 @@
 KEY1=VALUE1
 KEY2=ValueFromKey1=$(KEY1)   # Value="ValueFromKey1=VALUE1"
 ````
+- Default values can be provided with variable substitution via `${KEY-default}`
+````
+KEY=Value$(UnknownKey-123)   # Value="Value123"
+````
+
 
 - Either double-quoted or single-quoted multi-line values supported
 ````

@@ -148,6 +148,7 @@ type
     DoubleQuotedChar = '"';
     EscapeChar = '\';
     KeyNameRegexPattern = '([a-zA-Z_]+[a-zA-Z0-9_]*)';
+    DefaultValueRegex = '-([^}]*)';
   strict private
     fMap:TNameValueMap;
     fOptions:TDotEnvOptions;
@@ -351,18 +352,25 @@ procedure TDotEnv.AddKeyPair(const KeyName:string; const KeyValue:string; const 
   var
     Regex:TRegEx;
     Match:TMatch;
-    VarName, ResolvedValue:string;
+    VarName, ResolvedValue, DefaultValue:string;
   begin
     Result := Input;
 
-    RegEx := TRegEx.Create('\$\{' + TDotEnv.KeyNameRegexPattern + '\}');
+    RegEx := TRegEx.Create('\$\{' + TDotEnv.KeyNameRegexPattern + '\}' + '|' +
+                           '\$\{' + TDotEnv.KeyNameRegexPattern + DefaultValueRegex + '\}');
     Match := Regex.Match(Result);
     while Match.Success do
     begin
+
       VarName := Match.Groups[1].Value;
+      DefaultValue := '';
+      if Match.Groups[1].Success and Match.Groups[3].Success then //${KEY-default} found, extract default value
+      begin
+        DefaultValue := Match.Groups[2].Value;
+      end;
 
       if not TryGet(VarName, ResolvedValue) then
-        ResolvedValue := ''; // Variable is not defined, default to empty string
+        ResolvedValue := DefaultValue;
 
       Result := StringReplace(Result, Match.Value, ResolvedValue, []);
       Match := Match.NextMatch;
