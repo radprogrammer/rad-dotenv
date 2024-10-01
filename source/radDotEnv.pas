@@ -624,7 +624,7 @@ end;
 
 procedure TDotEnv.GuardedParseDotEnvFileContents(const Contents:string);
 type
-  TEnvState = (StateNormal, StateKey, StateValue, StateQuotedValue, StateIgnoreRestOfLine);
+  TEnvState = (StateNormal, StateKey, StateFirstValueChar, StateUnquotedValue, StateQuotedValue, StateIgnoreRestOfLine);
 
 var
   Start, Current:PChar;
@@ -662,10 +662,12 @@ begin
           end;
           if Current^ = '#' then
           begin
+            Inc(Current);
             State := StateIgnoreRestOfLine;
           end
           else
           begin
+            Start := Current;
             State := StateKey;
           end;
         end;
@@ -675,7 +677,7 @@ begin
           if (Current^ = '=') then   {//toconsider: Option to allow "Key Value" pairs?     or CharInSet(Current^, [#32, #9]) then}
           begin
             Key := Copy(Start, 1, Current-Start);
-            State := StateValue;
+            State := StateFirstValueChar;
             Inc(Current);
             Start := Current;
           end
@@ -690,7 +692,7 @@ begin
           end;
         end;
 
-      StateValue:
+      StateFirstValueChar:
         begin
           if CharInSet(Current^, [TDotEnv.DoubleQuotedChar, TDotEnv.SingleQuotedChar]) then  //start quoted value
           begin
@@ -700,6 +702,28 @@ begin
             Inc(Current);
           end
           else if CharInSet(Current^, [#10, #13]) then  //unquoted value ends with end of line characters
+          begin
+            Value := Copy(Start, 1, Current-Start);
+            AddKeyPair(Key, Value);
+            Inc(Current);
+            SetNormalState;
+          end
+          else if Current^ = '#' then  //inline comment starting, grab current unquoted value, ignore rest of line
+          begin
+            Value := Copy(Start, 1, Current-Start);
+            AddKeyPair(Key, Value);
+            State := StateIgnoreRestOfLine;
+          end
+          else
+          begin
+            State := StateUnquotedValue;  //minor optimization/logic improvement - skip CharInSet for quoted check as we shouldn't start a new QuotedValue while collecting an unquoted value
+            Inc(Current);
+          end;
+        end;
+
+      StateUnquotedValue:
+        begin
+          if CharInSet(Current^, [#10, #13]) then  //unquoted value ends with end of line characters
           begin
             Value := Copy(Start, 1, Current-Start);
             AddKeyPair(Key, Value);
@@ -756,7 +780,7 @@ begin
     end;
   end;
 
-  if (not Trim(Key).IsEmpty) and (State = StateValue) then
+  if (not Trim(Key).IsEmpty) and (State = StateUnquotedValue) then
   begin
     AddKeyPair(Key, Start);
   end;

@@ -30,6 +30,8 @@ type
     [TestCase('UnquotedValueLeftTrimmed', 'key= value,key,value')]
     [TestCase('UnquotedValueRightTrimmed', 'key=value ,key,value')]
     [TestCase('UnquotedValueTrimmed', 'key= value ,key,value')]
+    [TestCase('UnquotedValueWithEmbededDblQuoteMaintained', 'key=value"keep,key,value"keep')]  //arguably incorrect value format, but be generous on input
+    [TestCase('UnquotedValueWithEmbededQuoteMaintained', 'key=value''keep,key,value''keep')]   //arguably incorrect value format, but be generous on input
 
     [TestCase('ValueSingleChar', 'k=v,k,v')]
     [TestCase('ValueNumeric', '0=1,0,1')]
