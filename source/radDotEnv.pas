@@ -149,12 +149,14 @@ type
     KeyNameRegexPattern = '([a-zA-Z_]+[a-zA-Z0-9_]*)';
     DefaultValueRegex = '-([^}]*)';
   strict private
-    fMap:TNameValueMap;
+    fNameValueMap:TNameValueMap;
+    fKeyQuoteMap:TDictionary<string, Char>;
     fOptions:TDotEnvOptions;
     procedure EnsureLoaded(const DotEnvSource:TDotEnvSource; const Contents:string='');
     procedure GuardedSearchFiles;
     procedure GuardedSetSystemEnvironmentVariables;
     procedure GuardedParseDotEnvFileContents(const Contents:string);
+    procedure GuardedDelayedVariableSubstitution;
   strict protected
     procedure Log(const msg:string);
 
@@ -228,13 +230,15 @@ constructor TDotEnv.Create(const Options:TDotEnvOptions);
 begin
   inherited Create;
   fOptions := Options;
-  fMap := nil;
+  fNameValueMap := nil;
+  fKeyQuoteMap := nil;
 end;
 
 
 destructor TDotEnv.Destroy;
 begin
-  fMap.Free;
+  fKeyQuoteMap.Free;
+  fNameValueMap.Free;
   inherited;
 end;
 
@@ -349,6 +353,181 @@ end;
 procedure TDotEnv.AddKeyPair(const KeyName:string; const KeyValue:string; const WhichQuotedValue:Char=#0);
 
 
+  function UnescapeString(const Input:string):string;
+  var
+    Src, Dst:PChar;
+    Ch:Char;
+    Len:Integer;
+
+    function GetEscapedChar(var P:PChar):Char;
+    begin
+      Inc(P); // Skip the backslash
+      case P^ of
+        'n': // Line feed
+          Result := #10;
+        't': // Tab
+          Result := #9;
+        'r': // Carriage return
+          Result := #13;
+        EscapeChar:
+          Result := EscapeChar;
+        '"':
+          Result := '"';
+        '''':
+          Result := '''';
+      else
+        Result := P^;  //unknown, as-is
+      end;
+      Inc(P);
+    end;
+
+
+  begin
+    Len := Length(Input);
+    SetLength(Result, Len);
+    Src := PChar(Input);
+    Dst := PChar(Result);
+
+    while Src^ <> #0 do
+    begin
+      if Src^ = EscapeChar then
+      begin
+        Ch := GetEscapedChar(Src);
+        Dst^ := Ch;
+      end
+      else
+      begin
+        Dst^ := Src^;
+        Inc(Src);
+      end;
+      Inc(Dst);
+    end;
+
+    SetLength(Result, Dst - PChar(Result));
+    Result := Result;
+  end;
+
+
+var
+  InterpolatedValue:string;
+  NormalizedKeyName:string;
+begin
+  if WhichQuotedValue = #0 then
+  begin
+    InterpolatedValue := KeyValue.Trim;  //Unquoted values are always trimmed
+  end
+  else
+  begin
+    InterpolatedValue := KeyValue;  //Quoted values keep spacing  Key=" value "
+  end;
+
+  if not (fOptions.EnvVarOptions.EscapeSequenceInterpolationOption = TEscapeSequenceInterpolationOption.EscapeSequencesNotSupported) then
+  begin
+    if (WhichQuotedValue = TDotEnv.DoubleQuotedChar) and (fOptions.EnvVarOptions.EscapeSequenceInterpolationOption = TEscapeSequenceInterpolationOption.SupportEscapesInDoubleQuotedValues) then
+    begin
+      InterpolatedValue := UnescapeString(InterpolatedValue);
+    end;
+  end;
+
+  NormalizedKeyName := FormattedKeyName(KeyName, fOptions.EnvVarOptions.KeyNameCaseOption);
+
+  fKeyQuoteMap.AddOrSetValue(NormalizedKeyName, WhichQuotedValue);
+  fNameValueMap.AddOrSetValue(NormalizedKeyName, InterpolatedValue);
+end;
+
+
+function TDotEnv.Get(const KeyName:string; const DefaultKeyValue:string = ''):string;
+begin
+  Result := Get(KeyName, DefaultKeyValue, fOptions.EnvVarOptions);
+end;
+
+
+function TDotEnv.Get(const KeyName:string; const DefaultKeyValue:string; const EnvVarOptions:TEnvVarOptions):string;
+begin
+  if not TryGet(KeyName, Result, EnvVarOptions) then
+  begin
+    Result := DefaultKeyValue;
+  end;
+end;
+
+
+function TDotEnv.TryGet(const KeyName:string; out KeyValue:string):Boolean;
+begin
+  Result := TryGet(KeyName, KeyValue, fOptions.EnvVarOptions);
+end;
+
+
+function TDotEnv.TryGet(const KeyName:string; out KeyValue:string; const EnvVarOptions:TEnvVarOptions):Boolean;
+var
+  StdKeyName:string;
+begin
+  if not Assigned(fNameValueMap) then
+  begin
+    EnsureLoaded(TDotEnvSource.FromFile);
+  end;
+
+  StdKeyName := FormattedKeyName(KeyName, EnvVarOptions.KeyNameCaseOption);
+
+  case EnvVarOptions.RetrieveOption of
+    TRetrieveOption.OnlyFromDotEnv:
+      Result := TryGetFromDotEnv(StdKeyName, KeyValue);
+    TRetrieveOption.OnlyFromSys:
+      Result := TryGetFromSys(StdKeyName, KeyValue);
+    TRetrieveOption.PreferSys:
+      Result := TryGetFromSys(StdKeyName, KeyValue) or TryGetFromDotEnv(StdKeyName, KeyValue);
+  else { PreferDotEnv }
+    Assert(EnvVarOptions.RetrieveOption = TRetrieveOption.PreferDotEnv, Format('Unknown RetrieveOption (%d) in TDotEnv.TryGet', [Ord(EnvVarOptions.RetrieveOption)]));
+    Result := TryGetFromDotEnv(StdKeyName, KeyValue) or TryGetFromSys(StdKeyName, KeyValue);
+  end;
+
+  //toconsider: support variable substitution on load only, or also on Key value retrieval?  If also here on Key value retrieval, prevent loop condition
+end;
+
+
+function TDotEnv.TryGetFromDotEnv(const StdKeyName:string; out KeyValue:string):Boolean;
+begin
+  Result := fNameValueMap.TryGetValue(StdKeyName, KeyValue);
+end;
+
+
+function TDotEnv.TryGetFromSys(const StdKeyName:string; out KeyValue:string):Boolean;
+begin
+  KeyValue := GetEnvironmentVariable(StdKeyName);
+  Result := not KeyValue.Trim.IsEmpty;
+end;
+
+
+procedure TDotEnv.EnsureLoaded(const DotEnvSource:TDotEnvSource; const Contents:string='');
+
+begin
+  TMonitor.Enter(LoadGuard);
+  try
+    if not Assigned(fNameValueMap) then
+    begin
+      fNameValueMap := TNameValueMap.Create;
+      fKeyQuoteMap := TDictionary<string, Char>.Create;
+    end;
+
+    if DotEnvSource = TDotEnvSource.FromFile then
+    begin
+      GuardedSearchFiles;
+    end
+    else
+    begin
+      GuardedParseDotEnvFileContents(Contents);
+    end;
+
+    GuardedDelayedVariableSubstitution;
+
+    GuardedSetSystemEnvironmentVariables;
+  finally
+    TMonitor.Exit(LoadGuard);
+  end;
+end;
+
+procedure TDotEnv.GuardedDelayedVariableSubstitution;
+
+  //toconsider: Replace regex with scan for speed
   function ResolveEmbeddedVariables(const Input:string):string;
   var
     Regex:TRegEx;
@@ -378,176 +557,32 @@ procedure TDotEnv.AddKeyPair(const KeyName:string; const KeyValue:string; const 
     end;
   end;
 
-  function UnescapeString(const Input:string):string;
-  var
-    Src, Dst:PChar;
-    Output:string;
-    Ch:Char;
-    Len:Integer;
-
-    function GetEscapedChar(var P:PChar):Char;
-    begin
-      Inc(P); // Skip the backslash
-      case P^ of
-        'n': // Line feed
-          Result := #10;
-        't': // Tab
-          Result := #9;
-        'r': // Carriage return
-          Result := #13;
-        EscapeChar:
-          Result := EscapeChar;
-        '"':
-          Result := '"';
-        '''':
-          Result := '''';
-      else
-        Result := P^;  //unknown, as-is
-      end;
-      Inc(P);
-    end;
-
-
-  begin
-    Len := Length(Input);
-    SetLength(Output, Len);
-    Src := PChar(Input);
-    Dst := PChar(Output);
-
-    while Src^ <> #0 do
-    begin
-      if Src^ = EscapeChar then
-      begin
-        Ch := GetEscapedChar(Src);
-        Dst^ := Ch;
-      end
-      else
-      begin
-        Dst^ := Src^;
-        Inc(Src);
-      end;
-      Inc(Dst);
-    end;
-
-    SetLength(Output, Dst - PChar(Output));
-    Result := Output;
-  end;
-
-
 var
-  InterpolatedValue:string;
+  KeyName:string;
+  Value, InterpolatedValue:string;
+  WhichQuoteType:Char;
 begin
-  if WhichQuotedValue = #0 then
-  begin
-    InterpolatedValue := KeyValue.Trim;  //Unquoted values are always trimmed
-  end
-  else
-  begin
-    InterpolatedValue := KeyValue;  //Quoted values keep spacing  Key=" value "
-  end;
-
-  if not (fOptions.EnvVarOptions.EscapeSequenceInterpolationOption = TEscapeSequenceInterpolationOption.EscapeSequencesNotSupported) then
-  begin
-    if (WhichQuotedValue = TDotEnv.DoubleQuotedChar) and (fOptions.EnvVarOptions.EscapeSequenceInterpolationOption = TEscapeSequenceInterpolationOption.SupportEscapesInDoubleQuotedValues) then
-    begin
-      InterpolatedValue := UnescapeString(InterpolatedValue);
-    end;
-  end;
-
   if not (fOptions.EnvVarOptions.VariableSubstitutionOption = TVariableSubstitutionOption.VariableSubstutionNotSupported) then
   begin
-    if (WhichQuotedValue = TDotEnv.DoubleQuotedChar) and (fOptions.EnvVarOptions.VariableSubstitutionOption = TVariableSubstitutionOption.SupportSubstutionInDoubleQuotedValues) then
+    Assert(fOptions.EnvVarOptions.VariableSubstitutionOption = TVariableSubstitutionOption.SupportSubstutionInDoubleQuotedValues, 'Unhandled TVariableSubstitutionOption');
+
+    for KeyName in fNameValueMap.Keys do
     begin
-      InterpolatedValue := ResolveEmbeddedVariables(InterpolatedValue);
-    end;
-  end;
-
-  fMap.AddOrSetValue(FormattedKeyName(KeyName, fOptions.EnvVarOptions.KeyNameCaseOption), InterpolatedValue);
-end;
-
-
-function TDotEnv.Get(const KeyName:string; const DefaultKeyValue:string = ''):string;
-begin
-  Result := Get(KeyName, DefaultKeyValue, fOptions.EnvVarOptions);
-end;
-
-
-function TDotEnv.Get(const KeyName:string; const DefaultKeyValue:string; const EnvVarOptions:TEnvVarOptions):string;
-begin
-  if not TryGet(KeyName, Result, EnvVarOptions) then
-  begin
-    Result := DefaultKeyValue;
-  end;
-end;
-
-
-function TDotEnv.TryGet(const KeyName:string; out KeyValue:string):Boolean;
-begin
-  Result := TryGet(KeyName, KeyValue, fOptions.EnvVarOptions);
-end;
-
-
-function TDotEnv.TryGet(const KeyName:string; out KeyValue:string; const EnvVarOptions:TEnvVarOptions):Boolean;
-var
-  StdKeyName:string;
-begin
-  if not Assigned(fMap) then
-  begin
-    EnsureLoaded(TDotEnvSource.FromFile);
-  end;
-
-  StdKeyName := FormattedKeyName(KeyName, EnvVarOptions.KeyNameCaseOption);
-
-  case EnvVarOptions.RetrieveOption of
-    TRetrieveOption.OnlyFromDotEnv:
-      Result := TryGetFromDotEnv(StdKeyName, KeyValue);
-    TRetrieveOption.OnlyFromSys:
-      Result := TryGetFromSys(StdKeyName, KeyValue);
-    TRetrieveOption.PreferSys:
-      Result := TryGetFromSys(StdKeyName, KeyValue) or TryGetFromDotEnv(StdKeyName, KeyValue);
-  else { PreferDotEnv }
-    Assert(EnvVarOptions.RetrieveOption = TRetrieveOption.PreferDotEnv, Format('Unknown RetrieveOption (%d) in TDotEnv.TryGet', [Ord(EnvVarOptions.RetrieveOption)]));
-    Result := TryGetFromDotEnv(StdKeyName, KeyValue) or TryGetFromSys(StdKeyName, KeyValue);
-  end;
-
-end;
-
-
-function TDotEnv.TryGetFromDotEnv(const StdKeyName:string; out KeyValue:string):Boolean;
-begin
-  Result := fMap.TryGetValue(StdKeyName, KeyValue);
-end;
-
-
-function TDotEnv.TryGetFromSys(const StdKeyName:string; out KeyValue:string):Boolean;
-begin
-  KeyValue := GetEnvironmentVariable(StdKeyName);
-  Result := not KeyValue.Trim.IsEmpty;
-end;
-
-
-procedure TDotEnv.EnsureLoaded(const DotEnvSource:TDotEnvSource; const Contents:string='');
-
-begin
-  TMonitor.Enter(LoadGuard);
-  try
-    if not Assigned(fMap) then
-    begin
-      fMap := TNameValueMap.Create;
+      if fKeyQuoteMap.TryGetValue(KeyName, WhichQuoteType) and (WhichQuoteType = TDotENv.DoubleQuotedChar) then
+      begin
+        if fNameValueMap.TryGetValue(KeyName, Value) then
+        begin
+          //toconsider: Just call add without comaprison
+          //Does the added comparison cost override the cost of always updateing Dictionary?  (Assume low number of variables in list)
+          InterpolatedValue := ResolveEmbeddedVariables(Value);
+          if not SameStr(Value, InterpolatedValue) then
+          begin
+            fNameValueMap.AddOrSetValue(KeyName, InterpolatedValue);
+          end;
+        end;
+      end;
     end;
 
-    if DotEnvSource = TDotEnvSource.FromFile then
-    begin
-      GuardedSearchFiles;
-    end
-    else
-    begin
-      GuardedParseDotEnvFileContents(Contents);
-    end;
-
-    GuardedSetSystemEnvironmentVariables;
-  finally
-    TMonitor.Exit(LoadGuard);
   end;
 end;
 
@@ -604,7 +639,7 @@ begin
   if fOptions.SetOption = TSetOption.NeverSet then
     Exit;
 
-  KeyPairArray := fMap.ToArray;
+  KeyPairArray := fNameValueMap.ToArray;
   for KeyPair in KeyPairArray do
   begin
     SetVar := True; //TSetOption.AlwaysSet
@@ -636,8 +671,6 @@ var
   procedure SetNormalState;
   begin
     State := StateNormal;
-    Key := '';
-    Value := '';
     WhichQuotedValue := #0;
     Start := Current;
     EscapePair := False;
@@ -676,7 +709,7 @@ begin
         begin
           if (Current^ = '=') then   {//toconsider: Option to allow "Key Value" pairs?     or CharInSet(Current^, [#32, #9]) then}
           begin
-            Key := Copy(Start, 1, Current-Start);
+            SetString(Key, Start, Current-Start);
             State := StateFirstValueChar;
             Inc(Current);
             Start := Current;
@@ -703,14 +736,14 @@ begin
           end
           else if CharInSet(Current^, [#10, #13]) then  //unquoted value ends with end of line characters
           begin
-            Value := Copy(Start, 1, Current-Start);
+            SetString(Value, Start, Current-Start);
             AddKeyPair(Key, Value);
             Inc(Current);
             SetNormalState;
           end
           else if Current^ = '#' then  //inline comment starting, grab current unquoted value, ignore rest of line
           begin
-            Value := Copy(Start, 1, Current-Start);
+            SetString(Value, Start, Current-Start);
             AddKeyPair(Key, Value);
             State := StateIgnoreRestOfLine;
           end
@@ -725,14 +758,14 @@ begin
         begin
           if CharInSet(Current^, [#10, #13]) then  //unquoted value ends with end of line characters
           begin
-            Value := Copy(Start, 1, Current-Start);
+            SetString(Value, Start, Current-Start);
             AddKeyPair(Key, Value);
             Inc(Current);
             SetNormalState;
           end
           else if Current^ = '#' then  //inline comment starting, grab current unquoted value, ignore rest of line
           begin
-            Value := Copy(Start, 1, Current-Start);
+            SetString(Value, Start, Current-Start);
             AddKeyPair(Key, Value);
             State := StateIgnoreRestOfLine;
           end
@@ -756,7 +789,7 @@ begin
             end
             else
             begin
-              Value := Copy(Start, 2, Current-Start-1);
+              SetString(Value, Start+1, Current-Start-1);
               AddKeyPair(Key, Value, WhichQuotedValue);
               Inc(Current);
               State := StateIgnoreRestOfLine;
@@ -780,9 +813,10 @@ begin
     end;
   end;
 
-  if (not Trim(Key).IsEmpty) and (State = StateUnquotedValue) then
+  if State = StateUnquotedValue then
   begin
-    AddKeyPair(Key, Start);
+    SetString(Value, Start, Current-Start);
+    AddKeyPair(Key, Value);
   end;
 end;
 

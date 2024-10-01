@@ -100,6 +100,8 @@ type
     [Test]
     procedure TestVariableSubstitutionOption;
     [Test]
+    procedure TestDelayedVariableSubstitution;
+    [Test]
     procedure TestEscapeSequenceInterpolationOption;
 
 {$IFDEF ALLTESTS}
@@ -175,6 +177,26 @@ begin
   end;
 
 end;
+
+//https://github.com/radprogrammer/rad-dotenv/issues/9
+procedure TTestDotEnv.TestDelayedVariableSubstitution;
+const
+  //without delayed variable substitution, the FullName value would be " "
+  ENV = 'FullName="${FirstName} ${LastName}"' + sLineBreak
+      + 'FirstName=John' + sLineBreak
+      + 'LastName=Doe';
+var
+  DotEnv:iDotEnv;
+begin
+  DotEnv := NewDotEnv
+           .UseRetrieveOption(TRetrieveOption.OnlyFromDotEnv)
+           .UseSetOption(TSetOption.NeverSet)
+           .UseVariableSubstitutionOption(TVariableSubstitutionOption.SupportSubstutionInDoubleQuotedValues)
+           .LoadFromString(ENV);
+
+  Assert.AreEqual('John Doe', DotEnv.Get('FullName'));
+end;
+
 
 procedure TTestDotEnv.TestVariableSubstitutionOption;
 const
