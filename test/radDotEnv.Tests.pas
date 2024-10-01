@@ -99,6 +99,10 @@ type
 
     [Test]
     procedure TestVariableSubstitutionOption;
+    const JUNK = '$@#$%{${invalid keyname}*{(*}{(}${(}${ }${(#@@!#';  //as long as } not paired with a preceding ${ with valid key in between then ignore all ${}
+    [TestCase('JunkNoVarDetected', 'key="' + JUNK + JUNK + '",key,' + JUNK + JUNK)]
+    [TestCase('JunkWithEmbeddedVar', 'key="' + JUNK + '${ActualVar}' + JUNK + '"' + sLineBreak + 'ActualVar=Value2,key,' + JUNK + 'Value2' + JUNK)]
+    procedure TestVariableSubstitutionJunk(const Contents:String; const KeyName:string; const ExpectedKeyValue:string);
     [Test]
     procedure TestDelayedVariableSubstitution;
     [Test]
@@ -197,6 +201,12 @@ begin
   Assert.AreEqual('John Doe', DotEnv.Get('FullName'));
 end;
 
+
+procedure TTestDotEnv.TestVariableSubstitutionJunk(const Contents:String; const KeyName:string; const ExpectedKeyValue:string);
+begin
+  fDotEnv.LoadFromString(Contents);
+  Assert.AreEqual(ExpectedKeyValue, fDotEnv.Get(KeyName));
+end;
 
 procedure TTestDotEnv.TestVariableSubstitutionOption;
 const
