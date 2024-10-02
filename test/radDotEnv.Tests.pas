@@ -1,7 +1,6 @@
 // DotEnv file (.env) support for Delphi
 // More info: https://github.com/radprogrammer/rad-dotenv
 unit radDotEnv.Tests;
-{$DEFINE ALLTESTS}
 
 interface
 
@@ -21,11 +20,13 @@ type
   private
     fDotEnv:iDotEnv;
   public
+
   [SetUp]
   procedure SetUp;
+
   [TearDown]
   procedure TearDown;
-{$IFDEF ALLTESTS}
+
     [TestCase('UnquotedValue', 'key=value,key,value')]
     [TestCase('UnquotedValueLeftTrimmed', 'key= value,key,value')]
     [TestCase('UnquotedValueRightTrimmed', 'key=value ,key,value')]
@@ -63,10 +64,12 @@ type
     [TestCase('SingleQuotedValueNotTrimmed', 'key='' value  '',key, value  ')]
     [TestCase('SingleQuotedValueWithCommentCharacter', 'key=''value#keep'',key,value#keep')]
     [TestCase('SingleQuotedValueWithDoubleQuote', 'key=''value"keep'',key,value"keep')]
+
     [TestCase('DoubleQuotedMultiLineValue', 'key="line1' + sLineBreak + ' Line2 #val ' + sLineBreak + '#Line3",key,line1' + sLineBreak + ' Line2 #val ' + sLineBreak + '#Line3')]
     [TestCase('DoubleQuotedNoEndingQuoteKeyIgnored', 'key="line1' + sLineBreak + ' Line2 #val ' + sLineBreak + '#Line3,key,')]
     [TestCase('SingleQuotedMultiLineValue', 'key=''line1' + sLineBreak + ' Line2 #val ' + sLineBreak + '#Line3'',key,line1' + sLineBreak + ' Line2 #val ' + sLineBreak + '#Line3')]
     [TestCase('SingleQuotedNoEndingQuoteKeyIgnored', 'key=''line1' + sLineBreak + ' Line2 #val ' + sLineBreak + '#Line3,key,')]
+
     //Note: Escape sequeneces supported by default via defEscapeSequenceInterpolationOption
     [TestCase('EscapedDoubleQuoted\n', 'key="value\n",key,value'+#10)]
     [TestCase('EscapedDoubleQuoted\r', 'key="value\r",key,value'+#13)]
@@ -74,7 +77,6 @@ type
     [TestCase('EscapedDoubleQuoted\''', 'key="value\''",key,value''')]
     [TestCase('EscapedDoubleQuoted\"', 'key="value\"",key,value"')]
     [TestCase('EscapedDoubleQuoted\\', 'key="value\\",key,value\')]
-
     [TestCase('EscapedDoubleQuoted\\\\', 'key="value\\\\",key,value\\')]
     [TestCase('EscapedDoubleQuoted\\\"', 'key="value\\\"",key,value\"')]
     [TestCase('EscapedDoubleQuoted\\\"\"', 'key="value\\\"\"",key,value\""')]
@@ -89,44 +91,59 @@ type
     [TestCase('EscapedSingleQuoted\''IsNoEndingQuote', 'key=''value\'''',key,value\')]
     [TestCase('EscapedSingleQuoted\"AsIs', 'key=''value\"'',key,value\"')]
     [TestCase('EscapedSingleQuoted\\AsIs', 'key=''value\\'',key,value\\')]
-    //Note: this set of tests is configured "OnlyFromDotEnv" and "NeverSet"
-    [TestCase('SimpleVariableSubstitution', 'key1=value1' + sLineBreak + 'key2="ValueFromKey1=${KEY1}.",key2,ValueFromKey1=value1.')]
-    [TestCase('UnknownVariableIsBlankByDefault', 'key="value${NonExistingVariableNameHere}test",key,valuetest')]
-    [TestCase('UnknownVariableDefaultValueProvided', 'key="value${NonExistingVariableNameHere-DefValue}test",key,valueDefValuetest')]
-    [TestCase('SingleQuotedSimpleVariableSubstitutionIgnored', 'key1=value1' + sLineBreak + 'key2=''ValueFromKey1=${KEY1}.'',key2,ValueFromKey1=${KEY1}.')]
-{$ENDIF}
     procedure TestSingleKeyValue(const Contents:String; const KeyName:string; const ExpectedKeyValue:string);
 
+
+    [TestCase('VarOK_Basic',           'key1=value1' + sLineBreak + 'key2="${KEY1}"'       + ',key2,value1')]
+    [TestCase('VarOK_DefaultValue',    'key1=value1' + sLineBreak + 'key2="${NOKEY-123}"'  + ',key2,123')]
+    [TestCase('VarOK_EmptyDefault',    'key1=value1' + sLineBreak + 'key2="${NOKEY-}"'     + ',key2,')]
+    [TestCase('VarOK_QuoteDefault',    'key1=value1' + sLineBreak + 'key2="${NOKEY-''}"'   + ',key2,''')]
+    [TestCase('VarOK_EscDblQuoteDef',  'key1=value1' + sLineBreak + 'key2="${NOKEY-\"1}"'  + ',key2,"1')]
+    [TestCase('VarErr_InvalidKeyName', 'key1=value1' + sLineBreak + 'key2="${KE Y1}"'      + ',key2,${KE Y1}')]
+    [TestCase('VarErr_TokenNotEnded',  'key1=value1' + sLineBreak + 'key2="${KEY1"'        + ',key2,${KEY1')]
+    [TestCase('VarErr_EndDash',        'key1=value1' + sLineBreak + 'key2="${KEY1-"'       + ',key2,${KEY1-')]
+    [TestCase('VarErr_EndDefDash',     'key1=value1' + sLineBreak + 'key2="${KEY1-123"'    + ',key2,${KEY1-123')]
+    [TestCase('VarErr_EndDefBrace',    'key1=value1' + sLineBreak + 'key2="${KEY1-123${"'  + ',key2,${KEY1-123${')]
+    [TestCase('VarNo_NoQuoteAsIs',     'key1=value1' + sLineBreak + 'key2=ValueFromKey1=${KEY1}.,key2,ValueFromKey1=${KEY1}.')]
+    [TestCase('VarNo_SingleQuoteAsIs', 'key1=value1' + sLineBreak + 'key2=''ValueFromKey1=${KEY1}.'',key2,ValueFromKey1=${KEY1}.')]
+    procedure TestVarSub(const Contents:String; const KeyName:string; const ExpectedKeyValue:string);
+
     [Test]
-    procedure TestVariableSubstitutionOption;
+    procedure TestVarSubDelay;
+
+    [Test]
+    procedure TestVarSubOption;
+
     const JUNK = '$@#$%{${invalid keyname}*{(*}{(}${(}${ }${(#@@!#';  //as long as } not paired with a preceding ${ with valid key in between then ignore all ${}
-    [TestCase('JunkNoVarDetected', 'key="' + JUNK + JUNK + '",key,' + JUNK + JUNK)]
-    [TestCase('JunkWithEmbeddedVar', 'key="' + JUNK + '${ActualVar}' + JUNK + '"' + sLineBreak + 'ActualVar=Value2,key,' + JUNK + 'Value2' + JUNK)]
-    procedure TestVariableSubstitutionJunk(const Contents:String; const KeyName:string; const ExpectedKeyValue:string);
-    [Test]
-    procedure TestDelayedVariableSubstitution;
+    [TestCase('AllJunk_NoVarDetected', 'key="' + JUNK + JUNK + '",key,' + JUNK + JUNK)]
+    [TestCase('MostlyJunk_WithEmbeddedVar', 'key="' + JUNK + '${ActualVar}' + JUNK + '"' + sLineBreak + 'ActualVar=Value2,key,' + JUNK + 'Value2' + JUNK)]
+    //this sort of data should be single-quoted to prevent erroneous variable substitution
+    [TestCase('AllJunk_SingleQuoteIgnores', 'key=''' + JUNK + '${ActualVar-123}' + JUNK + '''' + sLineBreak + 'ActualVar=Value2,key,' + JUNK + '${ActualVar-123}' + JUNK)]
+    //unquoted will truncate junk at first pound sign found
+    [TestCase('AllJunk_NoQuoteTruncatesAtHash','key=' + JUNK + '${ActualVar-123}' + JUNK + sLineBreak + 'ActualVar=Value2,key,$@')]
+    procedure TestVarSubJunk(const Contents:String; const KeyName:string; const ExpectedKeyValue:string);
+
+
     [Test]
     procedure TestEscapeSequenceInterpolationOption;
 
-{$IFDEF ALLTESTS}
-    [TestCase('EmptyContent', '')]
-    [TestCase('SingleWhiteSpace', ' ')]
-    [TestCase('MultipleWhiteSpace', '   ')]
-    [TestCase('MultipleWhiteSpaceEndOfLines1', #10 + ' ' + #13)]
-    [TestCase('MultipleWhiteSpaceEndOfLines2', #13 + ' ' + #10)]
-    [TestCase('MultipleWhiteSpaceEndOfLines3', #13 + '  ' + #10 + '  ')]
-    [TestCase('MultipleWhiteSpaceEndOfLinesTab', #10 + ' ' + #13 + ' ' + #9)]
-    [TestCase('OneCommentLine', '#')]
-    [TestCase('TwoCommentLine', '# #')]
-    [TestCase('ConsecutivePounds', '####')]
-    [TestCase('TwoCommentLines', '#' + sLineBreak + '#')]
-    [TestCase('CommentWhiteSpaceCommentLine', '#' + sLineBreak + '  ' + '#')]
-{$ENDIF}
-    procedure TestNoExceptionsOnJunkParse(const Contents:String);
+    [TestCase('Junk_EmptyContent', '')]
+    [TestCase('Junk_SingleWhiteSpace', ' ')]
+    [TestCase('Junk_MultipleWhiteSpace', '   ')]
+    [TestCase('Junk_MultipleWhiteSpaceEndOfLines1', #10 + ' ' + #13)]
+    [TestCase('Junk_MultipleWhiteSpaceEndOfLines2', #13 + ' ' + #10)]
+    [TestCase('Junk_MultipleWhiteSpaceEndOfLines3', #13 + '  ' + #10 + '  ')]
+    [TestCase('Junk_MultipleWhiteSpaceEndOfLinesTab', #10 + ' ' + #13 + ' ' + #9)]
+    [TestCase('Junk_OneCommentLine', '#')]
+    [TestCase('Junk_TwoCommentLine', '# #')]
+    [TestCase('Junk_ConsecutivePounds', '####')]
+    [TestCase('Junk_TwoCommentLines', '#' + sLineBreak + '#')]
+    [TestCase('Junk_CommentWhiteSpaceCommentLine', '#' + sLineBreak + '  ' + '#')]
+    procedure TestNoExceptions(const Contents:String);
 
-    [Test]
     // Also tests custom EnvFileName option
     // LargeFile created with radDotEnv.TestFileGenerator
+    [Test]
     procedure TestLargeFile;
 
   end;
@@ -148,17 +165,14 @@ procedure TTestDotEnv.TearDown;
 begin
   fDotEnv := nil;
 end;
-procedure TTestDotEnv.TestNoExceptionsOnJunkParse(const Contents:String);
-begin
-  fDotEnv.LoadFromString(Contents);
-  Assert.IsTrue(True);
-end;
+
 
 procedure TTestDotEnv.TestSingleKeyValue(const Contents:String; const KeyName:string; const ExpectedKeyValue:string);
 begin
   fDotEnv.LoadFromString(Contents);
   Assert.AreEqual(ExpectedKeyValue, fDotEnv.Get(KeyName));
 end;
+
 
 procedure TTestDotEnv.TestLargeFile;
 var
@@ -182,8 +196,23 @@ begin
 
 end;
 
+
+procedure TTestDotEnv.TestVarSub(const Contents:String; const KeyName:string; const ExpectedKeyValue:string);
+var
+  DotEnv:iDotEnv;
+begin
+  DotEnv := NewDotEnv
+           .UseRetrieveOption(TRetrieveOption.OnlyFromDotEnv)
+           .UseSetOption(TSetOption.NeverSet)
+           .UseVariableSubstitutionOption(TVariableSubstitutionOption.SupportSubstutionInDoubleQuotedValues)
+           .LoadFromString(Contents);
+
+  Assert.AreEqual(ExpectedKeyValue, DotEnv.Get(KeyName));
+end;
+
+
 //https://github.com/radprogrammer/rad-dotenv/issues/9
-procedure TTestDotEnv.TestDelayedVariableSubstitution;
+procedure TTestDotEnv.TestVarSubDelay;
 const
   //without delayed variable substitution, the FullName value would be " "
   ENV = 'FullName="${FirstName} ${LastName}"' + sLineBreak
@@ -202,13 +231,7 @@ begin
 end;
 
 
-procedure TTestDotEnv.TestVariableSubstitutionJunk(const Contents:String; const KeyName:string; const ExpectedKeyValue:string);
-begin
-  fDotEnv.LoadFromString(Contents);
-  Assert.AreEqual(ExpectedKeyValue, fDotEnv.Get(KeyName));
-end;
-
-procedure TTestDotEnv.TestVariableSubstitutionOption;
+procedure TTestDotEnv.TestVarSubOption;
 const
   Key1Name = 'KEYx';
   Key1Value = 'VALUEx';
@@ -260,6 +283,13 @@ begin
 end;
 
 
+procedure TTestDotEnv.TestVarSubJunk(const Contents:String; const KeyName:string; const ExpectedKeyValue:string);
+begin
+  fDotEnv.LoadFromString(Contents);
+  Assert.AreEqual(ExpectedKeyValue, fDotEnv.Get(KeyName));
+end;
+
+
 procedure TTestDotEnv.TestEscapeSequenceInterpolationOption;
 const
   KeyQuotedName = 'KEYQ';
@@ -302,6 +332,13 @@ begin
 
     DotEnv := nil;
   end;
+end;
+
+
+procedure TTestDotEnv.TestNoExceptions(const Contents:String);
+begin
+  fDotEnv.LoadFromString(Contents);
+  Assert.IsTrue(True);
 end;
 
 

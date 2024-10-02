@@ -128,8 +128,7 @@ uses
   {$IFDEF POSIX}
   Posix.Stdlib,
   {$ENDIF}
-  System.IOUtils,
-  System.RegularExpressions;
+  System.IOUtils;
 
 var
   LoadGuard:TObject;
@@ -159,12 +158,13 @@ type
     procedure GuardedDelayedVariableSubstitution;
   strict protected
     procedure Log(const msg:string);
-
     procedure AddKeyPair(const KeyName:string; const KeyValue:string; const WhichQuotedValue:Char=#0);
     function FormattedKeyName(const KeyName:string; const KeyNameCaseOption:TKeyNameCaseOption):string;
 
     function TryGetFromDotEnv(const StdKeyName:string; out KeyValue:string):Boolean;
     function TryGetFromSys(const StdKeyName:string; out KeyValue:string):Boolean;
+
+    function IsValidKeyNameChar(C:Char; IsFirstChar:Boolean):Boolean;
   public
     constructor Create; overload;
     constructor Create(const Options:TDotEnvOptions); overload;
@@ -525,42 +525,152 @@ begin
   end;
 end;
 
+
+
+function TDotEnv.IsValidKeyNameChar(C:Char; IsFirstChar:Boolean):Boolean;
+begin
+  if IsFirstChar then
+    Result := CharInSet(C, ['A'..'Z', 'a'..'z', '_'])  // First character: only a letter or underscore allowed
+  else
+    Result := CharInSet(C, ['A'..'Z', 'a'..'z', '_', '0'..'9']);   // Subsequent characters: letter, digit, or underscore
+end;
+
+
 procedure TDotEnv.GuardedDelayedVariableSubstitution;
 
-  //toconsider: Replace regex with scan for speed
-  function ResolveEmbeddedVariables(const Input:string):string;
+  // [Data][${VAR[-[defaul]]}][DATA][EOL]
+  function ResolveEmbeddedVariables(const Input:string; var NumberOfTokensReplaced:Integer):string;  //Replaces regex matching https://github.com/radprogrammer/rad-dotenv/issues/10
+  type
+    TParseState = (StartNewBlockOfText, StartPossibleVariableName, CollectPossibleVariableNameChars, CollectPossibleDefaultValueChars);
   var
-    Regex:TRegEx;
-    Match:TMatch;
-    VarName, ResolvedValue, DefaultValue:string;
+    P, PossibleVarNameStart, PossibleVarNameEnd, PossibleDefaultValueStart:PChar;
+    VarName, DefaultValue, Value:string;
+    State:TParseState;
   begin
-    Result := Input;
+    Result := '';
+    NumberOfTokensReplaced := 0;
 
-    RegEx := TRegEx.Create('\$\{' + TDotEnv.KeyNameRegexPattern + '\}' + '|' +
-                           '\$\{' + TDotEnv.KeyNameRegexPattern + DefaultValueRegex + '\}');
-    Match := Regex.Match(Result);
-    while Match.Success do
+    PossibleDefaultValueStart := nil;
+    PossibleVarNameStart := nil;
+    PossibleVarNameEnd := nil;
+
+    P := PChar(Input);
+    State := StartNewBlockOfText;
+    while P^ <> #0 do
     begin
+      case State of
 
-      VarName := Match.Groups[1].Value;
-      DefaultValue := '';
-      if (Match.Groups[1].Success) and (Match.Groups.Count > 2) and Match.Groups[3].Success then //${KEY-default} found, extract default value
-      begin
-        DefaultValue := Match.Groups[3].Value;
+        StartNewBlockOfText:
+          begin
+            if (P^ = '$') and ((P + 1)^ = '{') then // Entering a potential token
+            begin
+              Inc(P, 2);  // Skip "${"
+              State := StartPossibleVariableName;
+              PossibleVarNameEnd := nil;
+              PossibleVarNameStart := P;
+            end
+            else  // Collect all non-tokenized text
+            begin
+              Result := Result + P^;
+              Inc(P);
+            end;
+          end;
+
+
+        StartPossibleVariableName:
+          begin
+            if IsValidKeyNameChar(P^, {IsFirstChar=}True) then
+            begin
+              PossibleVarNameStart := P;
+              State := CollectPossibleVariableNameChars;
+            end
+            else  // could have been a token, but wasn't because the key name is invalid, treat as normal text
+            begin
+              Result := Result + '${' + Copy(PossibleVarNameStart, 0, P - PossibleVarNameStart + 1);
+              Inc(P);
+              State := StartNewBlockOfText;
+            end;
+          end;
+
+
+        CollectPossibleVariableNameChars:
+          begin
+            if IsValidKeyNameChar(P^, {IsFirstChar=}False) then  // Accumulate valid variable name characters
+            begin
+              PossibleVarNameEnd := P;
+              Inc(P);
+            end
+            else if P^ = '-' then // Start parsing default value after '-'
+            begin
+              State := CollectPossibleDefaultValueChars;
+              Inc(P);
+              PossibleDefaultValueStart := P;
+            end
+            else if P^ = '}' then  // Close variable expression, no default value
+            begin
+              { Replace A Valid Token }
+              Inc(NumberOfTokensReplaced);
+
+              SetString(VarName, PossibleVarNameStart, P-PossibleVarNameStart);
+              Result := Result + Get(VarName);  //todo: VarSubstitutionTokenNotFoundOption   ReplaceTokenWithBlankValue, LeaveTokenAsIs
+              //Result := Result + '${' + VarName + '}';
+              Inc(P);  // Skip '}'
+              State := StartNewBlockOfText;  // Go back to normal text processing
+            end
+            else  // could have been a token, but wasn't because the key name is invalid, treat as normal text
+            begin
+              Result := Result + '${' + Copy(PossibleVarNameStart, 0, P - PossibleVarNameStart + 1);
+              Inc(P);
+              State := StartNewBlockOfText;
+            end;
+          end;
+
+
+        CollectPossibleDefaultValueChars:
+          begin
+            if P^ = '}' then  // Close variable expression with a default value specified
+            begin
+              { Replace A Valid Token }
+              Inc(NumberOfTokensReplaced);
+
+              SetString(VarName, PossibleVarNameStart, PossibleVarNameEnd-PossibleVarNameStart);
+              SetString(DefaultValue, PossibleDefaultValueStart, P-PossibleDefaultValueStart);
+              Value := Get(VarName);
+              if Value.IsEmpty then
+                Value := DefaultValue;
+
+              Result := Result + Value;  //todo: VarSubstitutionTokenNotFoundOption   ReplaceTokenWithBlankValue, LeaveTokenAsIs
+              Inc(P);  // Skip '}'
+              State := StartNewBlockOfText;
+            end
+            else // Accumulate default value characters
+            begin
+              Inc(P);
+            end;
+          end;
       end;
-
-      if not TryGet(VarName, ResolvedValue) then
-        ResolvedValue := DefaultValue;
-
-      Result := StringReplace(Result, Match.Value, ResolvedValue, []);
-      Match := Match.NextMatch;
     end;
+
+
+    if NumberOfTokensReplaced = 0 then Exit(Input);
+
+    if State <> StartNewBlockOfText then
+    begin
+      // Append any remaining text that was under consideration as a possible token
+      if not (PossibleVarNameStart = nil) then
+      begin
+        Result := Result + '${' + Copy(PossibleVarNameStart, 0, P - PossibleVarNameStart + 1);
+      end;
+    end;
+
   end;
+
 
 var
   KeyName:string;
   Value, InterpolatedValue:string;
   WhichQuoteType:Char;
+  NumberOfTokensReplaced:Integer;
 begin
   if not (fOptions.EnvVarOptions.VariableSubstitutionOption = TVariableSubstitutionOption.VariableSubstutionNotSupported) then
   begin
@@ -572,10 +682,8 @@ begin
       begin
         if fNameValueMap.TryGetValue(KeyName, Value) then
         begin
-          //toconsider: Just call add without comaprison
-          //Does the added comparison cost override the cost of always updateing Dictionary?  (Assume low number of variables in list)
-          InterpolatedValue := ResolveEmbeddedVariables(Value);
-          if not SameStr(Value, InterpolatedValue) then
+          InterpolatedValue := ResolveEmbeddedVariables(Value, NumberOfTokensReplaced);
+          if NumberOfTokensReplaced > 0 then
           begin
             fNameValueMap.AddOrSetValue(KeyName, InterpolatedValue);
           end;
