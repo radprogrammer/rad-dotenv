@@ -166,8 +166,7 @@ type
 
     function IsValidKeyNameChar(C:Char; IsFirstChar:Boolean):Boolean;
   public
-    constructor Create; overload;
-    constructor Create(const Options:TDotEnvOptions); overload;
+    constructor Create(const Options:TDotEnvOptions);
     destructor Destroy; override;
 
     function Get(const KeyName:string; const DefaultKeyValue:string = ''):string; overload;
@@ -216,13 +215,6 @@ begin
   Result.EnvSearchPaths := [ExtractFilePath(ParamStr(0))]; // toreview: ParamStr(0) seems more generally appropriate than GetModuleName(HInstance)
   Result.FileEncoding := TEncoding.UTF8;
   Result.LogProc := nil;
-end;
-
-
-constructor TDotEnv.Create;
-begin
-  inherited;
-  Create(TDotEnvOptions.DefaultOptions);
 end;
 
 
@@ -817,10 +809,18 @@ begin
         begin
           if (Current^ = '=') then   {//toconsider: Option to allow "Key Value" pairs?     or CharInSet(Current^, [#32, #9]) then}
           begin
-            SetString(Key, Start, Current-Start);
-            State := StateFirstValueChar;
-            Inc(Current);
-            Start := Current;
+            if Start=Current then //Junk:  The line starts with =, ignore it
+            begin
+              Inc(Current);
+              State := StateIgnoreRestOfLine;
+            end
+            else
+            begin
+              SetString(Key, Start, Current-Start);
+              State := StateFirstValueChar;
+              Inc(Current);
+              Start := Current;
+            end;
           end
           else if CharInSet(Current^, [#10, #13]) then  // A key was started but no = found to set a value before end of line, so it gets ignored
           begin
@@ -841,19 +841,6 @@ begin
             WhichQuotedValue := Current^;
             Start := Current;
             Inc(Current);
-          end
-          else if CharInSet(Current^, [#10, #13]) then  //unquoted value ends with end of line characters
-          begin
-            SetString(Value, Start, Current-Start);
-            AddKeyPair(Key, Value);
-            Inc(Current);
-            SetNormalState;
-          end
-          else if Current^ = '#' then  //inline comment starting, grab current unquoted value, ignore rest of line
-          begin
-            SetString(Value, Start, Current-Start);
-            AddKeyPair(Key, Value);
-            State := StateIgnoreRestOfLine;
           end
           else
           begin

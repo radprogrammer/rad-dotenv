@@ -33,6 +33,8 @@ type
     [TestCase('UnquotedValueTrimmed', 'key= value ,key,value')]
     [TestCase('UnquotedValueWithEmbededDblQuoteMaintained', 'key=value"keep,key,value"keep')]  //arguably incorrect value format, but be generous on input
     [TestCase('UnquotedValueWithEmbededQuoteMaintained', 'key=value''keep,key,value''keep')]   //arguably incorrect value format, but be generous on input
+    [TestCase('UnquotedInvalidNoKey', 'key' + #13#10 + 'key2=value2,key2,value2')]
+    [TestCase('UnquotedInvalidStartsEqual', '=x' + #13#10 + 'key2=value2,key2,value2')]
 
     [TestCase('ValueSingleChar', 'k=v,k,v')]
     [TestCase('ValueNumeric', '0=1,0,1')]
@@ -100,7 +102,7 @@ type
     [TestCase('VarOK_QuoteDefault',    'key1=value1' + sLineBreak + 'key2="${NOKEY-''}"'   + ',key2,''')]
     [TestCase('VarOK_EscDblQuoteDef',  'key1=value1' + sLineBreak + 'key2="${NOKEY-\"1}"'  + ',key2,"1')]
     [TestCase('VarErr_InvalidKeyName', 'key1=value1' + sLineBreak + 'key2="${KE Y1}"'      + ',key2,${KE Y1}')]
-    [TestCase('VarErr_TokenNotEnded',  'key1=value1' + sLineBreak + 'key2="${KEY1"'        + ',key2,${KEY1')]
+    [TestCase('VarErr_TokenNotEnded',  'key1=value1"' + sLineBreak + 'key2="${NoKey-123}${KEY2",key2,123${KEY2')]
     [TestCase('VarErr_EndDash',        'key1=value1' + sLineBreak + 'key2="${KEY1-"'       + ',key2,${KEY1-')]
     [TestCase('VarErr_EndDefDash',     'key1=value1' + sLineBreak + 'key2="${KEY1-123"'    + ',key2,${KEY1-123')]
     [TestCase('VarErr_EndDefBrace',    'key1=value1' + sLineBreak + 'key2="${KEY1-123${"'  + ',key2,${KEY1-123${')]
@@ -145,6 +147,13 @@ type
     // LargeFile created with radDotEnv.TestFileGenerator
     [Test]
     procedure TestLargeFile;
+
+
+    [Test]
+    procedure TestSetEnv;
+
+    [Test]
+    procedure TestCustomPath;
 
   end;
 
@@ -342,6 +351,79 @@ begin
 end;
 
 
+procedure TTestDotEnv.TestSetEnv;
+    function GuidWithoutBracesOrDashes: string;
+    var
+      Guid: TGUID;
+    begin
+      Guid := TGUID.NewGuid;
+      Result := StringReplace(StringReplace(Guid.ToString, '{', '', [rfReplaceAll]), '}', '', [rfReplaceAll]);
+      Result := StringReplace(Result, '-', '', [rfReplaceAll]);
+    end;
+var
+  DotEnv:iDotEnv;
+  KeyName, KeyValue1, KeyValue2:string;
+begin
+  KeyName := 'radDotEnv_' + GuidWithoutBracesOrDashes;
+  KeyValue1 := '1_' + GuidWithoutBracesOrDashes;
+
+  DotEnv := NewDotEnv
+           .UseRetrieveOption(TRetrieveOption.OnlyFromSys);
+  Assert.IsFalse(DotEnv.TryGet(KeyName, KeyValue2)); //not yet set
+
+
+  DotEnv := NewDotEnv
+           .UseRetrieveOption(TRetrieveOption.OnlyFromSys)
+           .UseSetOption(TSetOption.AlwaysSet)
+           .LoadFromString(Format('%s=%s', [KeyName, KeyValue1]));  //set system env var
+  Assert.AreEqual(KeyValue1, DotEnv.Get(KeyName)); //has been set
+
+
+  KeyValue2 := '2_' + GuidWithoutBracesOrDashes;
+  DotEnv := NewDotEnv
+           .UseRetrieveOption(TRetrieveOption.OnlyFromSys)
+           .UseSetOption(TSetOption.NeverSet)
+           .LoadFromString(Format('%s=%s', [KeyName, KeyValue2])); //update DotEnv in-memory map to a new value
+  Assert.AreEqual(KeyValue1, DotEnv.Get(KeyName));     //system maintains original value set, not overwritten
+
+  DotEnv := NewDotEnv
+           .UseRetrieveOption(TRetrieveOption.OnlyFromSys)
+           .UseSetOption(TSetOption.DoNotOvewrite)
+           .LoadFromString(Format('%s=%s', [KeyName, KeyValue2]));  //Don't overwrite current value
+  Assert.AreEqual(KeyValue1, DotEnv.Get(KeyName)); //has not been overwritten
+
+  DotEnv := NewDotEnv
+           .UseRetrieveOption(TRetrieveOption.PreferSys)
+           .UseSetOption(TSetOption.DoNotOvewrite)
+           .LoadFromString(Format('%s=%s', [KeyName, KeyValue2]));  //Don't overwrite current value
+  Assert.AreEqual(KeyValue1, DotEnv.Get(KeyName)); //has not been overwritten
+
+  DotEnv := NewDotEnv
+           .UseRetrieveOption(TRetrieveOption.PreferDotEnv)
+           .UseSetOption(TSetOption.DoNotOvewrite)
+           .LoadFromString(Format('%s=%s', [KeyName, KeyValue2]));  //Don't overwrite current value
+  Assert.AreEqual(KeyValue2, DotEnv.Get(KeyName)); //has not been overwritten, but retrieved from in-memory map
+
+
+  DotEnv := NewDotEnv
+           .UseRetrieveOption(TRetrieveOption.OnlyFromSys)
+           .UseSetOption(TSetOption.AlwaysSet)
+           .LoadFromString(Format('%s=%s', [KeyName, KeyValue2]));  //overwrite again
+  Assert.AreEqual(KeyValue2, DotEnv.Get(KeyName)); //has been overwritten
+
+end;
+
+
+//bin folder was setup a subdirectory named "childpath" that inclues a .env file which contains "child=found"
+procedure TTestDotEnv.TestCustomPath;
+var
+  DotEnv:iDotEnv;
+begin
+  DotEnv := NewDotEnv
+           .UseEnvSearchPaths(['childpath'])
+           .UseRetrieveOption(TRetrieveOption.OnlyFromDotEnv);
+  Assert.AreEqual('found', DotEnv.Get('child'));
+end;
 
 
 initialization
