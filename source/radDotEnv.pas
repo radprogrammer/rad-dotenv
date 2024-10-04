@@ -18,6 +18,9 @@ uses
 type
 
   {$REGION Support Types}
+  TStringKeyValue = TPair<string, string>;
+  TLogProc = procedure(const Msg:string) of object;
+
   TKeyNameCaseOption = (
     AlwaysToUpperInvariant,
     AlwaysToUpper,
@@ -54,15 +57,15 @@ type
 
   // Note: this option is n/a when using the "OnlyFromSys" Retrieve Option as no need to set System Environment Variables when only source is System
   TSetOption = (
+    /// <summary> After DotEnv file parsing is completed, always set system environment variables based on DotEnv values.</summary>
+    /// <remarks> DotEnv files take priority over (and replace) system variables. Useful for interop with older code that only reads system environment variables)</remarks>
+    AlwaysSet,
     /// <summary> After DotEnv file parsing is completed, set system environment variables based on DotEnv values only for system environment variables that have no value</summary>
     /// <remarks> System variables take priority over DotEnv files</remarks>
     DoNotOvewrite,
     /// <summary> After DotEnv file parsing is completed, do not set system environment variables based on DotEnv values</summary>
     /// <remarks> Only retrieve values from DotEnv files</remarks>
-    NeverSet,
-    /// <summary> After DotEnv file parsing is completed, always set system environment variables based on DotEnv values.</summary>
-    /// <remarks> DotEnv files take priority over (and replace) system variables. Useful for interop with older code that only reads system environment variables)</remarks>
-    AlwaysSet);
+    NeverSet);
 
 
   TDotEnvOptions = record
@@ -70,7 +73,7 @@ type
     defEnvFilename:string = '.env';
     defKeyNameCaseOption:TKeyNameCaseOption = TKeyNameCaseOption.AlwaysToUpperInvariant;
     defRetrieveOption:TRetrieveOption = TRetrieveOption.PreferDotEnv;
-    defSetOption:TSetOption = TSetOption.DoNotOvewrite;
+    defSetOption:TSetOption = TSetOption.AlwaysSet;
     defEscapeSequenceInterpolationOption = TEscapeSequenceInterpolationOption.SupportEscapesInDoubleQuotedValues;
     defVariableSubstitutionOption = TVariableSubstitutionOption.SupportSubstutionInDoubleQuotedValues;
   public
@@ -79,7 +82,7 @@ type
     EnvFileName:string;
     EnvSearchPaths:TArray<string>;
     FileEncoding:TEncoding;
-    LogProc:TProc<string>;
+    LogProc:TLogProc;
     class function DefaultOptions:TDotEnvOptions; static;
   end;
   {$ENDREGION}
@@ -93,6 +96,8 @@ type
     function TryGet(const KeyName:string; out KeyValue:string):Boolean; overload;
     function TryGet(const KeyName:string; out KeyValue:string; const EnvVarOptions:TEnvVarOptions):Boolean; overload;
 
+    function ToArray:TArray<TStringKeyValue>;
+
     {$REGION Optional usage for functional style initialization}
     function UseKeyNameCaseOption(const KeyNameCaseOption:TKeyNameCaseOption):iDotEnv;
     function UseRetrieveOption(const RetrieveOption:TRetrieveOption):iDotEnv;
@@ -102,7 +107,7 @@ type
     function UseEnvFileName(const EnvFileName:string):iDotEnv;
     function UseEnvSearchPaths(const EnvSearchPaths:TArray<string>):iDotEnv;
     function UseFileEncoding(const FileEncoding:TEncoding):iDotEnv;
-    function UseLogProc(const LogProc:TProc<string>):iDotEnv;
+    function UseLogProc(const LogProc:TLogProc):iDotEnv;
     function Load:iDotEnv;
     function LoadFromString(const DotEnvContents:string):iDotEnv;
     {$ENDREGION}
@@ -135,7 +140,6 @@ var
 
 type
   TNameValueMap = TDictionary<string, string>; // Add + 1 to: https://embt.atlassian.net/servicedesk/customer/portal/1/RSS-1862
-  TStringKeyValue = TPair<string, string>;
   TDotEnvSource = (FromFile, FromString);
 
 
@@ -175,6 +179,8 @@ type
     function TryGet(const KeyName:string; out KeyValue:string):Boolean; overload;
     function TryGet(const KeyName:string; out KeyValue:string; const EnvVarOptions:TEnvVarOptions):Boolean; overload;
 
+    function ToArray:TArray<TStringKeyValue>;
+
     {$REGION Optional usage for functional style initialization}
     function UseKeyNameCaseOption(const KeyNameCaseOption:TKeyNameCaseOption):iDotEnv;
     function UseRetrieveOption(const RetrieveOption:TRetrieveOption):iDotEnv;
@@ -183,7 +189,7 @@ type
     function UseVariableSubstitutionOption(const VariableSubstitutionOption:TVariableSubstitutionOption):iDotEnv;
     function UseEnvFileName(const EnvFileName:string):iDotEnv;
     function UseEnvSearchPaths(const EnvSearchPaths:TArray<string>):iDotEnv;
-    function UseLogProc(const LogProc:TProc<string>):iDotEnv;
+    function UseLogProc(const LogProc:TLogProc):iDotEnv;
     function UseFileEncoding(const FileEncoding:TEncoding):iDotEnv;
     function Load:iDotEnv;
     function LoadFromString(const DotEnvContents:string):iDotEnv;
@@ -300,7 +306,7 @@ begin
 end;
 
 
-function TDotEnv.UseLogProc(const LogProc:TProc<string>):iDotEnv;
+function TDotEnv.UseLogProc(const LogProc:TLogProc):iDotEnv;
 begin
   fOptions.LogProc := LogProc;
   Result := self;
@@ -319,6 +325,18 @@ begin
   Result := Self;
 end;
 
+
+function TDotEnv.ToArray:TArray<TStringKeyValue>;
+begin
+  if Assigned(fNameValueMap) then
+  begin
+    Result := fNameValueMap.ToArray;
+  end
+  else
+  begin
+    Result := nil;
+  end;
+end;
 
 function TDotEnv.FormattedKeyName(const KeyName:string; const KeyNameCaseOption:TKeyNameCaseOption):string;
 begin

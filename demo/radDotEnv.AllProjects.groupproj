@@ -1,0 +1,72 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{9947BC62-F169-4A54-A55F-4B199FE41F6B}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="..\test\radDotEnv.DUnitX.Tests.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="radDotEnv.DemoConsoleApp.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="..\devtool\radDotEnv.DevTool.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="..\test\util\radDotEnv.TestFileGenerator.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="radDotEnv_DUnitX_Tests">
+        <MSBuild Projects="..\test\radDotEnv.DUnitX.Tests.dproj"/>
+    </Target>
+    <Target Name="radDotEnv_DUnitX_Tests:Clean">
+        <MSBuild Projects="..\test\radDotEnv.DUnitX.Tests.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="radDotEnv_DUnitX_Tests:Make">
+        <MSBuild Projects="..\test\radDotEnv.DUnitX.Tests.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="radDotEnv_DemoConsoleApp">
+        <MSBuild Projects="radDotEnv.DemoConsoleApp.dproj"/>
+    </Target>
+    <Target Name="radDotEnv_DemoConsoleApp:Clean">
+        <MSBuild Projects="radDotEnv.DemoConsoleApp.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="radDotEnv_DemoConsoleApp:Make">
+        <MSBuild Projects="radDotEnv.DemoConsoleApp.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="radDotEnv_DevTool">
+        <MSBuild Projects="..\devtool\radDotEnv.DevTool.dproj"/>
+    </Target>
+    <Target Name="radDotEnv_DevTool:Clean">
+        <MSBuild Projects="..\devtool\radDotEnv.DevTool.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="radDotEnv_DevTool:Make">
+        <MSBuild Projects="..\devtool\radDotEnv.DevTool.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="radDotEnv_TestFileGenerator">
+        <MSBuild Projects="..\test\util\radDotEnv.TestFileGenerator.dproj"/>
+    </Target>
+    <Target Name="radDotEnv_TestFileGenerator:Clean">
+        <MSBuild Projects="..\test\util\radDotEnv.TestFileGenerator.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="radDotEnv_TestFileGenerator:Make">
+        <MSBuild Projects="..\test\util\radDotEnv.TestFileGenerator.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="radDotEnv_DUnitX_Tests;radDotEnv_DemoConsoleApp;radDotEnv_DevTool;radDotEnv_TestFileGenerator"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="radDotEnv_DUnitX_Tests:Clean;radDotEnv_DemoConsoleApp:Clean;radDotEnv_DevTool:Clean;radDotEnv_TestFileGenerator:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="radDotEnv_DUnitX_Tests:Make;radDotEnv_DemoConsoleApp:Make;radDotEnv_DevTool:Make;radDotEnv_TestFileGenerator:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>
