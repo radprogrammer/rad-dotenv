@@ -1,10 +1,13 @@
 # rad-dotenv
 ## DotEnv file (.env) support for Delphi
 
-- Add DotEnv file support by including `radDotEnv.pas` from this repository in your project
+- Add DotEnv file support by including `radDotEnv.pas` in your project
 - Optional `dotenv` singleton variable created at startup (disabled by default)
 - Fully complies with DotEnv Draft RFC: https://github.com/radprogrammer/dotenv-RFC
 - No exceptions are raised on parsing issues to prevent difficult to debug application startup issues
+- Custom paths can be searched (only the directory of the application is searched by default)
+- Custom filenames can be used (utilizes `.env` by default)
+- Custom file encoding can be specified (defaults to UTF8 by default)
 - Extremely fast dotenv file parser (fastest parser tested)
 
 ## Key Value Syntax Examples
