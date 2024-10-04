@@ -47,7 +47,7 @@ Third line"
 
 
 ## DevTool
-A sample DevTool project included that loads an .env file and displays the contents in an editable memo field. A grid is displayed of the parsed entries and another grid that reveals the current system Environment Variables.  A "Save and Reload env" button allows you to save the contents of the DotEnv file and see that parsed results along with a refreshed list of Environment Variables to offer a handy way of debuggin .env file parsing.
+A sample DevTool project included that loads an .env file and displays the contents in an editable memo field. A grid is displayed of the parsed entries and another grid that reveals the current system Environment Variables.  A "Save and Reload env" button allows you to save the contents of the DotEnv file and see that parsed results along with a refreshed list of Environment Variables to offer a handy way of debugging .env file parsing.
 ![DevTool ScreenShot](https://github.com/radprogrammer/rad-dotenv/blob/master/devtool/radDotEnv.DevTool.ScreenShot.png)
 
 ## License
