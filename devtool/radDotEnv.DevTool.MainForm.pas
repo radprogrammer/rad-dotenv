@@ -1,3 +1,5 @@
+// DotEnv file (.env) support for Delphi
+// More info: https://github.com/radprogrammer/rad-dotenv
 unit radDotEnv.DevTool.MainForm;
 
 interface
