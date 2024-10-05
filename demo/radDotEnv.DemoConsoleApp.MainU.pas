@@ -18,7 +18,6 @@ begin
   env := NewDotEnv.UseRetrieveOption(TRetrieveOption.PreferDotEnv)
                   .UseSetOption(TSetOption.AlwaysSet)
                   .UseEscapeSequenceInterpolationOption(TEscapeSequenceInterpolationOption.SupportEscapesInDoubleQuotedValues)
-                  .UseVariableSubstitutionOption(TVariableSubstitutionOption.SupportSubstutionInDoubleQuotedValues)
                   .Load;
 
 (*

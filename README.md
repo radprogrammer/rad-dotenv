@@ -32,6 +32,16 @@ KEY2="ValueFromKey1=${KEY1}"   # Value=ValueFromKey1=VALUE1
 ````
 KEY="Value${UnknownKey-123}"   # Value=Value123
 ````
+- Available option to support variable substitution in Unquoted values
+````
+KEY1=VALUE1
+KEY2=ValueFromKey1=${KEY1}   # Value=ValueFromKey1=VALUE1
+````
+- Single-Quoted values always avoid variable substitution and escape sequence expansion
+````
+KEY1=VALUE1
+KEY2='ValueFromKey1=${KEY1}'   # Value=ValueFromKey1=${KEY1}
+````
 - Either double-quoted or single-quoted **multi-line values** supported
 ````
 ONE=`First line

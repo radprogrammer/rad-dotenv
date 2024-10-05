@@ -213,7 +213,6 @@ begin
   DotEnv := NewDotEnv
            .UseRetrieveOption(TRetrieveOption.OnlyFromDotEnv)
            .UseSetOption(TSetOption.NeverSet)
-           .UseVariableSubstitutionOption(TVariableSubstitutionOption.SupportSubstutionInDoubleQuotedValues)
            .LoadFromString(Contents);
 
   Assert.AreEqual(ExpectedKeyValue, DotEnv.Get(KeyName));
@@ -233,7 +232,6 @@ begin
   DotEnv := NewDotEnv
            .UseRetrieveOption(TRetrieveOption.OnlyFromDotEnv)
            .UseSetOption(TSetOption.NeverSet)
-           .UseVariableSubstitutionOption(TVariableSubstitutionOption.SupportSubstutionInDoubleQuotedValues)
            .LoadFromString(ENV);
 
   Assert.AreEqual('John Doe', DotEnv.Get('FullName'));
@@ -245,7 +243,8 @@ const
   Key1Name = 'KEYx';
   Key1Value = 'VALUEx';
 
-  KeyQuotedName = 'KEYQ';
+  KeyDoubleQuotedName = 'KEYD';
+  KeySingleQuotedName = 'KEYS';
   KeyUnquotedName = 'KEYU';
   ValuePrefix = 'prefix';
   ValueSuffix = 'suffix';
@@ -258,9 +257,10 @@ var
   DotEnvString:string;
 begin
 
-  DotEnvString := Format('%s=%s',   [Key1Name, Key1Value]) + sLineBreak +                  //KEYx=VALUEx
-                  Format('%s="%s"', [KeyQuotedName,   UnsubstitutedValue]) + sLineBreak +  //KEYQ=prefix${KEYx}suffix
-                  Format('%s=%s',   [KeyUnquotedName, UnsubstitutedValue]);                //KEYU=prefix${KEYx}suffix
+  DotEnvString := Format('%s=%s',     [Key1Name, Key1Value]) + sLineBreak +                        //KEYx=VALUEx
+                  Format('%s="%s"',   [KeyDoubleQuotedName,   UnsubstitutedValue]) + sLineBreak +  //KEYD="prefix${KEYx}suffix"
+                  Format('%s=''%s''', [KeySingleQuotedName, UnsubstitutedValue]) + sLineBreak +    //KEYS='prefix${KEYx}suffix'
+                  Format('%s=%s',     [KeyUnquotedName, UnsubstitutedValue]);                      //KEYU=prefix${KEYx}suffix
 
   for Option := Low(TVariableSubstitutionOption) to High(TVariableSubstitutionOption) do
   begin
@@ -269,19 +269,29 @@ begin
              .UseSetOption(TSetOption.NeverSet);
 
     case Option of
-      TVariableSubstitutionOption.SupportSubstutionInDoubleQuotedValues:
+      TVariableSubstitutionOption.SupportSubstutionOnlyInDoubleQuotedValues:
         begin
-          DotEnv.UseVariableSubstitutionOption(TVariableSubstitutionOption.SupportSubstutionInDoubleQuotedValues);   //Enabled by defVariableSubstitutionOption
+          DotEnv.UseVariableSubstitutionOption(TVariableSubstitutionOption.SupportSubstutionOnlyInDoubleQuotedValues);   //Enabled by defVariableSubstitutionOption
           DotEnv.LoadFromString(DotEnvString);
-          Assert.AreEqual(ExpectedSubstitutedValue, DotEnv.Get(KeyQuotedName));  //variable was substituted since Value was double quoted and option enabled
-          Assert.AreEqual(UnsubstitutedValue, DotEnv.Get(KeyUnquotedName));      //variable was not substituted since Value was not double quoted (Option only applies to DoubleQuoted Values)
+          Assert.AreEqual(ExpectedSubstitutedValue, DotEnv.Get(KeyDoubleQuotedName));  //variable was substituted since Value was double quoted and option enabled
+          Assert.AreEqual(UnsubstitutedValue, DotEnv.Get(KeyUnquotedName));            //variable was not substituted since Value was Unquoted (Option only applies to DoubleQuoted Values)
+          Assert.AreEqual(UnsubstitutedValue, DotEnv.Get(KeySingleQuotedName));        //variable was not substituted since Value was Single Quoted (never subsituted)
+        end;
+      TVariableSubstitutionOption.SupportSubstitutionExceptInSingleQuotes:
+        begin
+          DotEnv.UseVariableSubstitutionOption(TVariableSubstitutionOption.SupportSubstitutionExceptInSingleQuotes);
+          DotEnv.LoadFromString(DotEnvString);
+          Assert.AreEqual(ExpectedSubstitutedValue, DotEnv.Get(KeyDoubleQuotedName));      //variable was substituted since Value was double quoted and option enabled
+          Assert.AreEqual(UnsubstitutedValue, DotEnv.Get(KeySingleQuotedName));            //variable was substituted since Value was unquoted and option enabled
+          Assert.AreEqual(ExpectedSubstitutedValue, DotEnv.Get(KeyUnquotedName));          //variable was not substituted since Value was Single Quoted (never subsituted)
         end;
       TVariableSubstitutionOption.VariableSubstutionNotSupported:
         begin
           DotEnv.UseVariableSubstitutionOption(TVariableSubstitutionOption.VariableSubstutionNotSupported);    //override to turn off option
           DotEnv.LoadFromString(DotEnvString);
-          Assert.AreEqual(UnsubstitutedValue, DotEnv.Get(KeyQuotedName));       //variable was not substituted, regardless of quote state
-          Assert.AreEqual(UnsubstitutedValue, DotEnv.Get(KeyUnquotedName));     //variable was not substituted, regardless of quote state
+          Assert.AreEqual(UnsubstitutedValue, DotEnv.Get(KeyDoubleQuotedName));       //variable was not substituted, regardless of quote state
+          Assert.AreEqual(UnsubstitutedValue, DotEnv.Get(KeyUnquotedName));           //variable was not substituted, regardless of quote state
+          Assert.AreEqual(UnsubstitutedValue, DotEnv.Get(KeySingleQuotedName));       //variable was not substituted since Value was Single Quoted (never subsituted)
         end;
     else
       Assert.Fail('Unknown TVariableSubstitutionOption ' + Ord(Option).ToString);

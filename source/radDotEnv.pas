@@ -44,7 +44,8 @@ type
     EscapeSequencesNotSupported);
 
   TVariableSubstitutionOption = (
-    SupportSubstutionInDoubleQuotedValues,
+    SupportSubstutionOnlyInDoubleQuotedValues,
+    SupportSubstitutionExceptInSingleQuotes,   //DoubleQuoted or Unquoted support
     VariableSubstutionNotSupported);
 
   TEnvVarOptions = record
@@ -75,7 +76,7 @@ type
     defRetrieveOption:TRetrieveOption = TRetrieveOption.PreferDotEnv;
     defSetOption:TSetOption = TSetOption.AlwaysSet;
     defEscapeSequenceInterpolationOption = TEscapeSequenceInterpolationOption.SupportEscapesInDoubleQuotedValues;
-    defVariableSubstitutionOption = TVariableSubstitutionOption.SupportSubstutionInDoubleQuotedValues;
+    defVariableSubstitutionOption = TVariableSubstitutionOption.SupportSubstutionOnlyInDoubleQuotedValues;
   public
     EnvVarOptions:TEnvVarOptions;
     SetOption:TSetOption;
@@ -684,18 +685,24 @@ var
 begin
   if not (fOptions.EnvVarOptions.VariableSubstitutionOption = TVariableSubstitutionOption.VariableSubstutionNotSupported) then
   begin
-    Assert(fOptions.EnvVarOptions.VariableSubstitutionOption = TVariableSubstitutionOption.SupportSubstutionInDoubleQuotedValues, 'Unhandled TVariableSubstitutionOption');
+    Assert(fOptions.EnvVarOptions.VariableSubstitutionOption in [TVariableSubstitutionOption.SupportSubstitutionExceptInSingleQuotes, TVariableSubstitutionOption.SupportSubstutionOnlyInDoubleQuotedValues], 'Unhandled TVariableSubstitutionOption');
 
     for KeyName in fNameValueMap.Keys do
     begin
-      if fKeyQuoteMap.TryGetValue(KeyName, WhichQuoteType) and (WhichQuoteType = TDotENv.DoubleQuotedChar) then
+      if fKeyQuoteMap.TryGetValue(KeyName, WhichQuoteType) then
       begin
-        if fNameValueMap.TryGetValue(KeyName, Value) then
+        //variable substitution doesn't ever happen in Single Quoted values
+        if WhichQuoteType = TDotEnv.SingleQuotedChar then Continue;
+
+        if (WhichQuoteType = TDotEnv.DoubleQuotedChar) or (fOptions.EnvVarOptions.VariableSubstitutionOption = SupportSubstitutionExceptInSingleQuotes) then
         begin
-          InterpolatedValue := ResolveEmbeddedVariables(Value, NumberOfTokensReplaced);
-          if NumberOfTokensReplaced > 0 then
+          if fNameValueMap.TryGetValue(KeyName, Value) then
           begin
-            fNameValueMap.AddOrSetValue(KeyName, InterpolatedValue);
+            InterpolatedValue := ResolveEmbeddedVariables(Value, NumberOfTokensReplaced);
+            if NumberOfTokensReplaced > 0 then
+            begin
+              fNameValueMap.AddOrSetValue(KeyName, InterpolatedValue);
+            end;
           end;
         end;
       end;
