@@ -2,9 +2,10 @@
 ## DotEnv file (.env) support for Delphi
 
 - Add DotEnv file support by including `radDotEnv.pas` in your project
-- Optional `dotenv` singleton variable created at startup (disabled by default)
+- `DotEnv` singleton variable created at startup (option can be disabled)
+  - Simple add the radDotEnv unit to your uses clause and use `DotEnv.Get('VariableName')`
 - Fully complies with DotEnv Draft RFC: https://github.com/radprogrammer/dotenv-RFC
-- No exceptions are raised on parsing issues to prevent difficult to debug application startup issues
+- No exceptions are raised on parsing issues to prevent difficult to debug application startup issues (a logging hook is available)
 - Custom paths can be searched (only the directory of the application is searched by default)
 - Custom filenames can be used (utilizes `.env` by default)
 - Custom file encoding can be specified (defaults to UTF8 by default)
@@ -15,7 +16,7 @@
 - `KEY=   Unquoted Values are trimmed   `  Value=`Unquoted Values are trimmed`
 - `# full line comments supported`
 - `KEY=TEXT #inline comments supported`  Value=`TEXT`
-- `KEY=TEXT#also inline comment (no space required)`  Value=`TEXT`
+- `KEY=TEXT#also inline comment (no space required)`  Value=`TEXT`  (see [Open Issue 12](https://github.com/radprogrammer/rad-dotenv/issues/12))
 - `KEY="DoubleQuoted"`  Value=`DoubleQuoted`
 - `KEY='SingleQuoted'`  Value=`SingleQuoted`
 - `KEY TEXT improperly formatted lines are ignored`
@@ -35,7 +36,7 @@ KEY2="ValueFromKey1=${KEY1}"   # Value=ValueFromKey1=VALUE1
 ````
 KEY="Value${UnknownKey-123}"   # Value=Value123
 ````
-- Available option to support variable substitution in Unquoted values
+- Available option to support variable substitution within Unquoted values (option is disabled by default)
 ````
 KEY1=VALUE1
 KEY2=ValueFromKey1=${KEY1}   # Value=ValueFromKey1=VALUE1
