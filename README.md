@@ -3,7 +3,7 @@
 
 - Add DotEnv file support by including `radDotEnv.pas` in your project
 - `DotEnv` singleton variable created at startup (option can be disabled)
-  - Simple add the radDotEnv unit to your uses clause and use `DotEnv.Get('VariableName')`
+  - Simply add the `radDotEnv` unit to your uses clause and use `DotEnv.Get('VariableName')`
 - Fully complies with DotEnv Draft RFC: https://github.com/radprogrammer/dotenv-RFC
 - No exceptions are raised on parsing issues to prevent difficult to debug application startup issues (a logging hook is available)
 - Custom paths can be searched (only the directory of the application is searched by default)
