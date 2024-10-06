@@ -7,8 +7,8 @@ unit radDotEnv;
 
 interface
 
-// Compiler define option to create a singleton DotEnv variable during initialization for ease of use
-{.$DEFINE radDotEnv_SINGLETON }
+// Compiler define option to disable the creation of a singleton DotEnv variable during initialization if desired
+{.$DEFINE radDotEnv_DisableSingleton }
 
 uses
   System.SysUtils,
@@ -119,7 +119,7 @@ function NewDotEnv:iDotEnv; overload;
 function NewDotEnv(const Options:TDotEnvOptions):iDotEnv; overload;
 
 
-{$IFDEF radDotEnv_SINGLETON}
+{$IFNDEF radDotEnv_DisableSingleton}
 var
   DotEnv:iDotEnv;
   {$IFEND}
@@ -944,8 +944,9 @@ end;
 initialization
 
 LoadGuard := TObject.Create;
-{$IFDEF radDotEnv_SINGLETON}
-DotEnv := NewDotEnv;
+
+{$IFNDEF radDotEnv_DisableSingleton}
+DotEnv := NewDotEnv.Load;
 {$IFEND}
 
 finalization
